@@ -1,0 +1,11 @@
+{
+  "desiredWidth": 2560,
+  "desiredHeight": 1440,
+  "defaultZone": "center",
+  "borderless": true,
+  "topmost": false,
+  "useWorkArea": false,
+  "games": [
+    { "match": "Heroes of the Storm", "by": "title" }
+  ]
+}

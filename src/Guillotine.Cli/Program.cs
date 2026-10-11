@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.Versioning;
 using Guillotine.Core;
 using Guillotine.Windows;
 
@@ -8,14 +9,27 @@ internal static class Program
 {
     private const string Usage = """
         Usage:
-          guillotine zones [options]    Print the derived zones for each monitor (default command)
-          guillotine monitors           Print monitor bounds, work area and DPI scaling
+          guillotine zones [options]          Print the derived zones for each monitor (default command)
+          guillotine monitors                 Print monitor bounds, work area and DPI scaling
+          guillotine windows                  List open windows with their size and process
+          guillotine apply [target] [options] Place a window in a zone at an exact client size
+          guillotine borderless on|off [target]
+          guillotine topmost on|off [target]
+          guillotine restore [target]         Put back the original frame and clear always on top
 
-        Options for zones:
-          --size WxH          Desired window size (default: from settings.json, else 2560x1440)
-          --zone NAME         Show only this zone (left, center, right, top-left, ...)
+        Target (default: the first running game from settings.json):
+          --title TEXT        Window whose title contains TEXT
+          --process NAME      Window owned by process NAME (with or without .exe)
+          --handle 0x1234     Window with this handle (from `guillotine windows`)
+          --wait              Keep checking every second until the window appears
+
+        Options:
+          --size WxH          Desired client size (default: from settings.json, else 2560x1440)
+          --zone NAME         left, center, right, top, bottom, or a pair such as top-left
+          --borderless / --framed     Remove or keep the title bar and borders (apply)
+          --topmost / --no-topmost    Turn always on top on or off (apply)
           --work-area         Compute zones from the work area (excludes the taskbar)
-          --monitor WxH[@X,Y] Use these bounds instead of reading real monitors (works on any OS)
+          --monitor WxH[@X,Y] zones only: use these bounds instead of real monitors (works on any OS)
           --settings PATH     Settings file (default: ./settings.json, then next to the exe)
         """;
 
@@ -25,59 +39,72 @@ internal static class Program
         {
             return Run(args);
         }
-        catch (Exception ex) when (ex is FormatException or ArgumentException or InvalidDataException or IOException)
+        catch (Exception ex) when (ex is FormatException or ArgumentException or InvalidDataException or IOException or WindowOperationException)
         {
             Console.Error.WriteLine($"error: {ex.Message}");
             return 1;
         }
     }
 
+    private sealed class Options
+    {
+        public bool? Toggle { get; set; }
+        public PixelSize? Size { get; set; }
+        public Zone? Zone { get; set; }
+        public bool? UseWorkArea { get; set; }
+        public bool? Borderless { get; set; }
+        public bool? Topmost { get; set; }
+        public PixelRect? ManualMonitor { get; set; }
+        public string? SettingsPath { get; set; }
+        public string? Title { get; set; }
+        public string? Process { get; set; }
+        public IntPtr? Handle { get; set; }
+        public bool Wait { get; set; }
+    }
+
     private static int Run(string[] args)
     {
         var queue = new Queue<string>(args);
         var command = queue.Count > 0 && !queue.Peek().StartsWith('-') ? queue.Dequeue() : "zones";
-
-        PixelSize? size = null;
-        Zone? onlyZone = null;
-        bool? useWorkArea = null;
-        PixelRect? manualMonitor = null;
-        string? settingsPath = null;
+        var options = new Options
+        {
+            Toggle = command is "borderless" or "topmost" ? ParseOnOff(queue, command) : null,
+        };
 
         while (queue.Count > 0)
         {
             var option = queue.Dequeue();
             switch (option)
             {
-                case "--size": size = PixelSize.Parse(Next(queue, option)); break;
-                case "--zone": onlyZone = Zone.Parse(Next(queue, option)); break;
-                case "--work-area": useWorkArea = true; break;
-                case "--monitor": manualMonitor = ParseMonitor(Next(queue, option)); break;
-                case "--settings": settingsPath = Next(queue, option); break;
+                case "--size": options.Size = PixelSize.Parse(Next(queue, option)); break;
+                case "--zone": options.Zone = Zone.Parse(Next(queue, option)); break;
+                case "--work-area": options.UseWorkArea = true; break;
+                case "--monitor": options.ManualMonitor = ParseMonitor(Next(queue, option)); break;
+                case "--settings": options.SettingsPath = Next(queue, option); break;
+                case "--borderless": options.Borderless = true; break;
+                case "--framed": options.Borderless = false; break;
+                case "--topmost": options.Topmost = true; break;
+                case "--no-topmost": options.Topmost = false; break;
+                case "--title": options.Title = Next(queue, option); break;
+                case "--process": options.Process = Next(queue, option); break;
+                case "--handle": options.Handle = ParseHandle(Next(queue, option)); break;
+                case "--wait": options.Wait = true; break;
                 case "-h" or "--help": Console.WriteLine(Usage); return 0;
                 default: throw new ArgumentException($"Unknown option '{option}'.\n\n{Usage}");
             }
         }
 
-        if (OperatingSystem.IsWindows())
-            Monitors.EnablePerMonitorDpiAwareness();
-
         switch (command)
         {
-            case "monitors":
-                PrintMonitors(RequireMonitors());
+            case "zones" when options.ManualMonitor is { } bounds:
+                PrintAllZones([new MonitorInfo(IntPtr.Zero, "--monitor", bounds, bounds, true, 96)], options);
                 return 0;
 
-            case "zones":
-                var settings = LoadSettings(settingsPath);
-                var desired = size ?? settings.DesiredSize;
-                var workArea = useWorkArea ?? settings.UseWorkArea;
-                var monitors = manualMonitor is { } bounds
-                    ? [new MonitorInfo(IntPtr.Zero, "--monitor", bounds, bounds, true, 96)]
-                    : RequireMonitors();
-
-                foreach (var monitor in monitors)
-                    PrintZones(monitor, desired, workArea, onlyZone);
-                return 0;
+            case "zones" or "monitors" or "windows" or "apply" or "borderless" or "topmost" or "restore":
+                if (!OperatingSystem.IsWindows())
+                    throw new ArgumentException($"`{command}` reads or changes real windows and needs Windows. `zones --monitor WxH` works anywhere.");
+                Monitors.EnablePerMonitorDpiAwareness();
+                return RunOnWindows(command, options);
 
             case "help":
                 Console.WriteLine(Usage);
@@ -87,6 +114,164 @@ internal static class Program
                 throw new ArgumentException($"Unknown command '{command}'.\n\n{Usage}");
         }
     }
+
+    [SupportedOSPlatform("windows")]
+    private static int RunOnWindows(string command, Options options)
+    {
+        if (command == "zones")
+        {
+            PrintAllZones(Monitors.GetAll(), options);
+            return 0;
+        }
+        if (command == "monitors")
+        {
+            PrintMonitors(Monitors.GetAll());
+            return 0;
+        }
+        if (command == "windows")
+        {
+            PrintWindows(WindowController.GetWindows());
+            return 0;
+        }
+
+        var settings = LoadSettings(options.SettingsPath);
+        var (window, game) = ResolveTarget(options, settings);
+
+        switch (command)
+        {
+            case "apply":
+                var placement = settings.PlacementFor(game);
+                placement = placement with
+                {
+                    Size = options.Size ?? placement.Size,
+                    Zone = options.Zone ?? placement.Zone,
+                    Borderless = options.Borderless ?? placement.Borderless,
+                    Topmost = options.Topmost ?? placement.Topmost,
+                    UseWorkArea = options.UseWorkArea ?? placement.UseWorkArea,
+                };
+                return PrintApplyResult(WindowController.Apply(window.Handle, placement));
+
+            case "borderless":
+                WindowController.SetBorderless(window.Handle, options.Toggle!.Value);
+                PrintWindows([WindowController.Describe(window.Handle)]);
+                return 0;
+
+            case "topmost":
+                WindowController.SetTopmost(window.Handle, options.Toggle!.Value);
+                PrintWindows([WindowController.Describe(window.Handle)]);
+                return 0;
+
+            case "restore":
+                PrintWindows([WindowController.Restore(window.Handle)]);
+                return 0;
+
+            default:
+                throw new ArgumentException($"Unknown command '{command}'.");
+        }
+    }
+
+    private static void PrintAllZones(IEnumerable<MonitorInfo> monitors, Options options)
+    {
+        var settings = LoadSettings(options.SettingsPath);
+        foreach (var monitor in monitors)
+            PrintZones(monitor, options.Size ?? settings.DesiredSize, options.UseWorkArea ?? settings.UseWorkArea, options.Zone);
+    }
+
+    private static bool ParseOnOff(Queue<string> queue, string command) =>
+        (queue.Count > 0 ? queue.Dequeue() : "") switch
+        {
+            "on" => true,
+            "off" => false,
+            _ => throw new ArgumentException($"Use `guillotine {command} on` or `guillotine {command} off`."),
+        };
+
+    private static IntPtr ParseHandle(string text)
+    {
+        var hex = text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? text[2..] : text;
+        return long.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value)
+            ? new IntPtr(value)
+            : throw new FormatException($"Expected a window handle like 0x1A2B, got '{text}'.");
+    }
+
+    /// <summary>
+    /// Finds the window to act on, plus the matching game rule from settings (for per-game overrides).
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static (WindowInfo Window, GameRule? Game) ResolveTarget(Options target, GuillotineSettings settings)
+    {
+        if (target.Handle is { } handle)
+        {
+            var window = WindowController.Describe(handle);
+            return (window, settings.FindGame(window.Title, window.ProcessName));
+        }
+
+        GameRule[] rules = target switch
+        {
+            { Title: { } title } => [new GameRule { Match = title, By = MatchBy.Title }],
+            { Process: { } process } => [new GameRule { Match = process, By = MatchBy.Process }],
+            _ when settings.Games.Count > 0 => [.. settings.Games],
+            _ => throw new ArgumentException("No target. Pass --title, --process or --handle, or add a game to settings.json."),
+        };
+        var description = string.Join(", ", rules.Select(r => $"{r.By.ToString().ToLowerInvariant()} \"{r.Match}\""));
+
+        bool announced = false;
+        while (true)
+        {
+            var windows = WindowController.GetWindows();
+            foreach (var rule in rules)
+            {
+                var matches = windows.Where(w => rule.Matches(w.Title, w.ProcessName)).ToList();
+                if (matches.Count == 0)
+                    continue;
+                if (matches.Count > 1)
+                    Console.WriteLine($"note: {matches.Count} windows match {rule.By.ToString().ToLowerInvariant()} \"{rule.Match}\"; using the first. Pass --handle to pick another.");
+
+                var window = matches[0];
+                // An explicit --title/--process still picks up per-game overrides from settings.
+                return (window, settings.FindGame(window.Title, window.ProcessName));
+            }
+
+            if (!target.Wait)
+                throw new ArgumentException($"No open window matches {description}. Run `guillotine windows` to see what is open, or add --wait.");
+            if (!announced)
+            {
+                Console.WriteLine($"Waiting for a window matching {description} (Ctrl+C to stop)...");
+                announced = true;
+            }
+            Thread.Sleep(TimeSpan.FromSeconds(1));
+        }
+    }
+
+    private static void PrintWindows(IEnumerable<WindowInfo> windows)
+    {
+        Console.WriteLine($"{"handle",-12}{"pid",8}  {"process",-22}{"client",-24}{"flags",-20}title");
+        foreach (var w in windows)
+        {
+            var flags = string.Join(",", new[] { w.IsBorderless ? "borderless" : null, w.IsTopmost ? "topmost" : null }.OfType<string>());
+            Console.WriteLine($"{w.HandleText,-12}{w.ProcessId,8}  {Truncate(w.ProcessName, 21),-22}{w.Client,-24}{flags,-20}{w.Title}");
+        }
+    }
+
+    private static int PrintApplyResult(ApplyResult result)
+    {
+        var w = result.Window;
+        Console.WriteLine($"Window   {w.HandleText} {w.ProcessName}: \"{w.Title}\"");
+        Console.WriteLine($"Monitor  {result.Monitor.DeviceName} {result.Monitor.Bounds}, scaling {result.Monitor.ScalePercent}%");
+        Console.WriteLine($"Target   client {result.Target}");
+        Console.WriteLine($"Actual   client {result.Actual}, window {w.Bounds}{(w.IsBorderless ? ", borderless" : "")}{(w.IsTopmost ? ", topmost" : "")}");
+
+        if (result.IsExact)
+        {
+            Console.WriteLine("OK       client area is exactly the target size and position");
+            return 0;
+        }
+
+        Console.WriteLine("warning  client area does not match the target. The game may limit its own size, or DPI scaling may interfere.");
+        return 2;
+    }
+
+    private static string Truncate(string text, int length) =>
+        text.Length <= length ? text : text[..(length - 1)] + "…";
 
     private static string Next(Queue<string> queue, string option) =>
         queue.Count > 0 ? queue.Dequeue() : throw new ArgumentException($"{option} needs a value.");
@@ -106,13 +291,6 @@ internal static class Program
             throw new FormatException($"Expected --monitor like 5120x1440 or 5120x1440@-1920,0, got '{text}'.");
 
         return new PixelRect(x, y, size.Width, size.Height);
-    }
-
-    private static IReadOnlyList<MonitorInfo> RequireMonitors()
-    {
-        if (!OperatingSystem.IsWindows())
-            throw new ArgumentException("Reading real monitors needs Windows. Pass --monitor WxH to try the math elsewhere.");
-        return Monitors.GetAll();
     }
 
     private static GuillotineSettings LoadSettings(string? explicitPath)

@@ -22,6 +22,21 @@ public sealed record GameRule
     public string? Zone { get; init; }
     public bool? Borderless { get; init; }
     public bool? Topmost { get; init; }
+
+    /// <summary>
+    /// Title rules match any window whose title contains <see cref="Match"/>. Process rules match the
+    /// process name exactly (".exe" is optional). Both ignore case.
+    /// </summary>
+    public bool Matches(string title, string processName) => By switch
+    {
+        MatchBy.Title => title.Contains(Match, StringComparison.OrdinalIgnoreCase),
+        MatchBy.Process => string.Equals(
+            StripExe(processName), StripExe(Match), StringComparison.OrdinalIgnoreCase),
+        _ => false,
+    };
+
+    private static string StripExe(string name) =>
+        name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
 }
 
 /// <summary>
@@ -42,6 +57,18 @@ public sealed record GuillotineSettings
     public List<GameRule> Games { get; init; } = [];
 
     public PixelSize DesiredSize => new(DesiredWidth, DesiredHeight);
+
+    /// <summary>Returns the first game rule matching the window, or null.</summary>
+    public GameRule? FindGame(string title, string processName) =>
+        Games.FirstOrDefault(game => game.Matches(title, processName));
+
+    /// <summary>The global defaults with any overrides from <paramref name="game"/> applied.</summary>
+    public Placement PlacementFor(GameRule? game) => new(
+        new PixelSize(game?.DesiredWidth ?? DesiredWidth, game?.DesiredHeight ?? DesiredHeight),
+        Core.Zone.Parse(game?.Zone ?? DefaultZone),
+        game?.Borderless ?? Borderless,
+        game?.Topmost ?? Topmost,
+        UseWorkArea);
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {

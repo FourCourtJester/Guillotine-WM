@@ -1,0 +1,114 @@
+<ui:FluentWindow
+    x:Class="Guillotine.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Title="Guillotine"
+    Width="560"
+    SizeToContent="Height"
+    ResizeMode="CanMinimize"
+    WindowStartupLocation="CenterScreen"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="Mica"
+    WindowCornerPreference="Round"
+    Loaded="OnLoaded"
+    Activated="OnActivated">
+
+    <ui:FluentWindow.Resources>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,16,0,8" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        </Style>
+        <Style x:Key="ZoneButton" TargetType="RadioButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
+            <Setter Property="GroupName" Value="Zone" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="Padding" Value="4,8" />
+        </Style>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Guillotine" ShowMaximize="False" />
+
+        <StackPanel Grid.Row="1" Margin="20,4,20,20">
+
+            <!-- Target window -->
+            <TextBlock Style="{StaticResource SectionHeader}" Margin="0,0,0,8" Text="Window" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ComboBox x:Name="WindowList" Grid.Column="0" SelectionChanged="OnWindowSelected">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding ProcessName, Mode=OneWay}" FontWeight="SemiBold" />
+                                <Run Text="  " />
+                                <Run Text="{Binding Title, Mode=OneWay}" />
+                            </TextBlock>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <ui:Button Grid.Column="1" Margin="8,0,0,0" Padding="10" ToolTip="Refresh the window list"
+                           Icon="{ui:SymbolIcon ArrowSync24}" Click="OnRefreshClicked" />
+            </Grid>
+            <TextBlock x:Name="WindowDetails" Margin="2,6,0,0" FontSize="12"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+
+            <!-- Size -->
+            <TextBlock Style="{StaticResource SectionHeader}" Text="Client size" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ui:NumberBox x:Name="WidthBox" Grid.Column="0" Minimum="1" Maximum="32768" MaxDecimalPlaces="0"
+                              SmallChange="1" LargeChange="10" PlaceholderText="Width" />
+                <TextBlock Grid.Column="1" Margin="10,0" VerticalAlignment="Center" Text="×" />
+                <ui:NumberBox x:Name="HeightBox" Grid.Column="2" Minimum="1" Maximum="32768" MaxDecimalPlaces="0"
+                              SmallChange="1" LargeChange="10" PlaceholderText="Height" />
+            </Grid>
+            <WrapPanel Margin="0,8,0,0">
+                <ui:Button Margin="0,0,6,0" Content="2560 × 1440" Tag="2560x1440" Click="OnPresetClicked" />
+                <ui:Button Margin="0,0,6,0" Content="1920 × 1080" Tag="1920x1080" Click="OnPresetClicked" />
+                <ui:Button Margin="0,0,6,0" Content="1280 × 720" Tag="1280x720" Click="OnPresetClicked" />
+            </WrapPanel>
+
+            <!-- Zone -->
+            <TextBlock Style="{StaticResource SectionHeader}" Text="Zone" />
+            <UniformGrid x:Name="ZoneGrid" Rows="3" Columns="3">
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="top-left" Content="Top left" />
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="top" Content="Top" />
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="top-right" Content="Top right" />
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="left" Content="Left" />
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="center" Content="Center" />
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="right" Content="Right" />
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom-left" Content="Bottom left" />
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom" Content="Bottom" />
+                <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom-right" Content="Bottom right" />
+            </UniformGrid>
+
+            <!-- Options -->
+            <TextBlock Style="{StaticResource SectionHeader}" Text="Options" />
+            <ui:ToggleSwitch x:Name="BorderlessSwitch" Content="Borderless (remove title bar and borders)" />
+            <ui:ToggleSwitch x:Name="TopmostSwitch" Margin="0,8,0,0" Content="Always on top" />
+            <ui:ToggleSwitch x:Name="WorkAreaSwitch" Margin="0,8,0,0" Content="Keep clear of the taskbar" />
+
+            <ui:InfoBar x:Name="Status" Margin="0,16,0,0" IsClosable="True" IsOpen="False" />
+
+            <StackPanel Margin="0,16,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+                <ui:Button Margin="0,0,8,0" Content="Restore" ToolTip="Put back the title bar and borders and turn off always on top"
+                           Icon="{ui:SymbolIcon ArrowReset24}" Click="OnRestoreClicked" />
+                <ui:Button Appearance="Primary" Content="Apply" Icon="{ui:SymbolIcon Crop24}" Click="OnApplyClicked" />
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

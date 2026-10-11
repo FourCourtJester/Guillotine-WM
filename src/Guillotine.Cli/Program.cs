@@ -9,18 +9,18 @@ internal static class Program
 {
     private const string Usage = """
         Usage:
-          guillotine zones [options]          Print the derived zones for each monitor (default command)
-          guillotine monitors                 Print monitor bounds, work area and DPI scaling
-          guillotine windows                  List open windows with their size and process
-          guillotine apply [target] [options] Place a window in a zone at an exact client size
-          guillotine borderless on|off [target]
-          guillotine topmost on|off [target]
-          guillotine restore [target]         Put back the original frame and clear always on top
+          guillotine-cli zones [options]          Print the derived zones for each monitor (default command)
+          guillotine-cli monitors                 Print monitor bounds, work area and DPI scaling
+          guillotine-cli windows                  List open windows with their size and process
+          guillotine-cli apply [target] [options] Place a window in a zone at an exact client size
+          guillotine-cli borderless on|off [target]
+          guillotine-cli topmost on|off [target]
+          guillotine-cli restore [target]         Put back the original frame and clear always on top
 
         Target (default: the first running game from settings.json):
           --title TEXT        Window whose title contains TEXT
           --process NAME      Window owned by process NAME (with or without .exe)
-          --handle 0x1234     Window with this handle (from `guillotine windows`)
+          --handle 0x1234     Window with this handle (from `guillotine-cli windows`)
           --wait              Keep checking every second until the window appears
 
         Options:
@@ -182,7 +182,7 @@ internal static class Program
         {
             "on" => true,
             "off" => false,
-            _ => throw new ArgumentException($"Use `guillotine {command} on` or `guillotine {command} off`."),
+            _ => throw new ArgumentException($"Use `guillotine-cli {command} on` or `guillotine-cli {command} off`."),
         };
 
     private static IntPtr ParseHandle(string text)
@@ -232,7 +232,7 @@ internal static class Program
             }
 
             if (!target.Wait)
-                throw new ArgumentException($"No open window matches {description}. Run `guillotine windows` to see what is open, or add --wait.");
+                throw new ArgumentException($"No open window matches {description}. Run `guillotine-cli windows` to see what is open, or add --wait.");
             if (!announced)
             {
                 Console.WriteLine($"Waiting for a window matching {description} (Ctrl+C to stop)...");

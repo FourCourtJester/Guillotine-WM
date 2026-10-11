@@ -1,0 +1,92 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          foreach ($project in 'src/Guillotine.App', 'src/Guillotine.Cli') {
+            dotnet publish $project -c Release -r win-x64 --self-contained true `
+              -p:PublishSingleFile=true `
+              -p:IncludeNativeLibrariesForSelfExtract=true `
+              -p:EnableCompressionInSingleFile=true `
+              -p:DebugType=none `
+              -o publish
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Copy-Item README.md, LICENSE publish/
+          Get-ChildItem publish
+
+      # Opens a plain window and runs the published CLI against it, so the Win32 code
+      # is exercised on a real Windows desktop on every push.
+      - name: Smoke test window placement
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $title = 'Guillotine smoke test'
+          $script = "Add-Type -AssemblyName System.Windows.Forms; " +
+                    "`$f = New-Object System.Windows.Forms.Form; `$f.Text = '$title'; `$f.Width = 500; `$f.Height = 400; " +
+                    "[System.Windows.Forms.Application]::Run(`$f)"
+          $form = Start-Process powershell -PassThru -ArgumentList '-NoProfile', '-Command', $script
+          try {
+            $cli = './publish/guillotine-cli.exe'
+            function Invoke-Cli { & $cli @args; if ($LASTEXITCODE -ne 0) { throw "guillotine-cli $args exited with $LASTEXITCODE" } }
+
+            Invoke-Cli monitors
+            Invoke-Cli apply --title $title --wait --size 640x480 --zone center --borderless --topmost
+            Invoke-Cli windows
+            Invoke-Cli apply --title $title --size 600x400 --zone top-left --framed --no-topmost
+            Invoke-Cli borderless on --title $title
+            Invoke-Cli restore --title $title
+          }
+          finally {
+            Stop-Process -Id $form.Id -ErrorAction SilentlyContinue
+          }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: guillotine-win-x64
+          path: publish/
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: guillotine-win-x64
+          path: guillotine
+
+      - name: Zip
+        run: cd guillotine && zip -r "../guillotine-${GITHUB_REF_NAME}-win-x64.zip" .
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: guillotine-*-win-x64.zip
+          generate_release_notes: true

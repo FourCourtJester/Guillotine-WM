@@ -29,6 +29,7 @@ internal static class Program
           --borderless / --framed     Remove or keep the title bar and borders (apply)
           --topmost / --no-topmost    Turn always on top on or off (apply)
           --work-area         Compute zones from the work area (excludes the taskbar)
+          --hold SECONDS      apply: keep watching and put the window back if the game changes it
           --monitor WxH[@X,Y] zones only: use these bounds instead of real monitors (works on any OS)
           --settings PATH     Settings file (default: ./settings.json, then next to the exe)
         """;
@@ -60,6 +61,7 @@ internal static class Program
         public string? Process { get; set; }
         public IntPtr? Handle { get; set; }
         public bool Wait { get; set; }
+        public int HoldSeconds { get; set; }
     }
 
     private static int Run(string[] args)
@@ -89,6 +91,8 @@ internal static class Program
                 case "--process": options.Process = Next(queue, option); break;
                 case "--handle": options.Handle = ParseHandle(Next(queue, option)); break;
                 case "--wait": options.Wait = true; break;
+                case "--hold": options.HoldSeconds = int.TryParse(Next(queue, option), out var seconds) && seconds > 0
+                    ? seconds : throw new FormatException("--hold needs a number of seconds."); break;
                 case "-h" or "--help": Console.WriteLine(Usage); return 0;
                 default: throw new ArgumentException($"Unknown option '{option}'.\n\n{Usage}");
             }
@@ -152,7 +156,9 @@ internal static class Program
                 var monitor = Monitors.ForWindow(window.Handle);
                 if (PlacementDiagnostics.CheckFits(monitor.Bounds, monitor.WorkArea, placement.Size, placement.UseWorkArea) is { } fitProblem)
                     Console.WriteLine($"warning  {fitProblem}");
-                return PrintApplyResult(WindowController.Apply(window.Handle, placement));
+                var result = WindowController.Apply(window.Handle, placement);
+                int exitCode = PrintApplyResult(result);
+                return options.HoldSeconds > 0 ? Hold(window.Handle, placement, result, options.HoldSeconds) : exitCode;
 
             case "borderless":
                 WindowController.SetBorderless(window.Handle, options.Toggle!.Value);
@@ -274,6 +280,39 @@ internal static class Program
 
         Console.WriteLine($"warning  {result.Problem}");
         return 2;
+    }
+
+    /// <summary>Watches the window and puts it back whenever it changes, logging each correction.</summary>
+    [SupportedOSPlatform("windows")]
+    private static int Hold(IntPtr hwnd, Placement placement, ApplyResult first, int seconds)
+    {
+        Console.WriteLine($"Holding for {seconds} s (Ctrl+C to stop)...");
+        var keeper = new WindowKeeper(hwnd, placement, first.Target);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        while (clock.Elapsed < TimeSpan.FromSeconds(seconds))
+        {
+            Thread.Sleep(100);
+            var change = keeper.Check();
+            if (change is null)
+            {
+                if (keeper.GaveUp)
+                    break;
+                continue;
+            }
+
+            var actual = change.Result.Actual;
+            Console.WriteLine($"{clock.Elapsed.TotalSeconds,6:0.0}s  window changed ({change.Changed}); put back, now {actual}" +
+                              (change.Result.IsExact ? "" : " (still not exact)"));
+        }
+
+        var final = WindowController.Describe(hwnd);
+        if (keeper.GaveUp)
+            Console.WriteLine($"gave up   the window changed itself {keeper.Reapplies} times; the game keeps resizing its own window");
+        else
+            Console.WriteLine($"done      corrected {keeper.Reapplies} time(s)");
+        Console.WriteLine($"Final     client {final.Client}{(final.IsBorderless ? ", borderless" : "")}{(final.IsTopmost ? ", topmost" : "")}");
+        return final.Client == first.Target ? 0 : 2;
     }
 
     private static string Truncate(string text, int length) =>

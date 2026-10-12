@@ -72,6 +72,7 @@ jobs:
               Invoke-Cli monitors
               Invoke-Cli apply --title $title --wait --size 640x480 --zone center --borderless --topmost
               Invoke-Cli windows
+              Invoke-Cli apply --title $title --size 640x480 --zone center --borderless --topmost --hold 1
               Invoke-Cli apply --title $title --size 600x400 --zone top-left --framed --no-topmost
               Invoke-Cli borderless on --title $title
               Invoke-Cli restore --title $title

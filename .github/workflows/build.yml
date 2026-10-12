@@ -63,6 +63,14 @@ jobs:
                           "`$f.MaximumSize = New-Object System.Drawing.Size(400, 300); " +
                           "[System.Windows.Forms.Application]::Run(`$f)"
           $cappedForm = Start-Process powershell -PassThru -ArgumentList '-NoProfile', '-Command', $cappedScript
+
+          # A decoy whose title only contains the target title (like a terminal showing the command line).
+          # Started last so it is in front; the exact title must still win.
+          Start-Sleep -Seconds 6
+          $decoyScript = "Add-Type -AssemblyName System.Windows.Forms; " +
+                         "`$f = New-Object System.Windows.Forms.Form; `$f.Text = 'Notes about $title'; " +
+                         "[System.Windows.Forms.Application]::Run(`$f)"
+          $decoyForm = Start-Process powershell -PassThru -ArgumentList '-NoProfile', '-Command', $decoyScript
           try {
             foreach ($flavour in 'all-in-one', 'lean') {
               Write-Host "--- $flavour"
@@ -70,7 +78,9 @@ jobs:
               function Invoke-Cli { & $cli @args; if ($LASTEXITCODE -ne 0) { throw "$cli $args exited with $LASTEXITCODE" } }
 
               Invoke-Cli monitors
-              Invoke-Cli apply --title $title --wait --size 640x480 --zone center --borderless --topmost
+              $output = Invoke-Cli apply --title $title --wait --size 640x480 --zone center --borderless --topmost
+              $output
+              if (-not ($output -match "powershell: `"$title`"")) { throw 'applied to the wrong window; the exact title should win over the decoy' }
               Invoke-Cli windows
               Invoke-Cli apply --title $title --size 640x480 --zone center --borderless --topmost --hold 1
               Invoke-Cli apply --title $title --size 600x400 --zone top-left --framed --no-topmost
@@ -88,6 +98,7 @@ jobs:
           finally {
             Stop-Process -Id $form.Id -ErrorAction SilentlyContinue
             Stop-Process -Id $cappedForm.Id -ErrorAction SilentlyContinue
+            Stop-Process -Id $decoyForm.Id -ErrorAction SilentlyContinue
           }
 
       - uses: actions/upload-artifact@v7

@@ -18,7 +18,8 @@ public static class WindowController
 
     /// <summary>
     /// Lists visible, titled, top-level application windows, the same set that appears in Alt+Tab.
-    /// Windows that belong to this process are left out.
+    /// Windows that belong to this process, its console, or the processes that started it (the
+    /// terminal, whose title often contains the command line) are left out.
     /// </summary>
     public static IReadOnlyList<WindowInfo> GetWindows()
     {
@@ -29,25 +30,39 @@ public static class WindowController
             return true;
         }, IntPtr.Zero);
 
-        int ownProcessId = Environment.ProcessId;
+        var excludedProcesses = ProcessAncestry.GetAncestors();
+        excludedProcesses.Add(Environment.ProcessId);
+        IntPtr console = GetConsoleWindow();
+
         var processNames = new Dictionary<int, string>();
         var windows = new List<WindowInfo>();
 
         foreach (var hwnd in handles)
         {
-            if (!IsCandidate(hwnd))
+            if (hwnd == console || !IsCandidate(hwnd))
                 continue;
 
             var info = TryDescribe(hwnd, processNames);
-            if (info is not null && info.ProcessId != ownProcessId)
+            if (info is not null && !excludedProcesses.Contains(info.ProcessId))
                 windows.Add(info);
         }
         return windows;
     }
 
-    /// <summary>Windows whose title or process matches <paramref name="game"/>.</summary>
-    public static IReadOnlyList<WindowInfo> Find(GameRule game) =>
-        GetWindows().Where(w => game.Matches(w.Title, w.ProcessName)).ToList();
+    /// <summary>
+    /// Windows that match any of <paramref name="rules"/>, best match first (an exact title before one
+    /// that only contains the text); ties stay in front-to-back order.
+    /// </summary>
+    public static IReadOnlyList<WindowInfo> Find(IEnumerable<GameRule> rules)
+    {
+        var ruleList = rules.ToList();
+        return GetWindows()
+            .Select(w => (Window: w, GuillotineSettings.BestMatch(ruleList, w.Title, w.ProcessName).Quality))
+            .Where(m => m.Quality > 0)
+            .OrderByDescending(m => m.Quality)
+            .Select(m => m.Window)
+            .ToList();
+    }
 
     /// <summary>Reads the current state of one window.</summary>
     public static WindowInfo Describe(IntPtr hwnd) =>

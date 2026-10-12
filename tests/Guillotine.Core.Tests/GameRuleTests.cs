@@ -57,14 +57,52 @@ public class GameRuleTests
     }
 
     [Fact]
-    public void FindGame_returns_first_match_or_null()
+    public void FindGame_returns_best_match_or_null()
     {
         var settings = GuillotineSettings.FromJson("""
             { "games": [ { "match": "Storm" }, { "match": "Heroes" }, { "match": "wow", "by": "process" } ] }
             """);
 
-        Assert.Equal("Storm", settings.FindGame("Heroes of the Storm", "x")?.Match);
+        // "Heroes" matches the start of the title, which beats "Storm" appearing somewhere in it.
+        Assert.Equal("Heroes", settings.FindGame("Heroes of the Storm", "x")?.Match);
+        Assert.Equal("Storm", settings.FindGame("A Storm Is Coming", "x")?.Match);
         Assert.Equal("wow", settings.FindGame("World of Warcraft", "Wow.exe")?.Match);
         Assert.Null(settings.FindGame("Notepad", "notepad"));
+    }
+}
+
+public class MatchQualityTests
+{
+    private static readonly GameRule Heroes = new() { Match = "Heroes of the Storm", By = MatchBy.Title };
+
+    [Theory]
+    [InlineData("Heroes of the Storm", GameRule.Exact)]
+    [InlineData("heroes of the storm", GameRule.Exact)]
+    [InlineData("Heroes of the Storm - Loading", GameRule.TitleStartsWith)]
+    [InlineData("Administrator: guillotine-cli apply --title \"Heroes of the Storm\"", GameRule.TitleContains)]
+    [InlineData("Notepad", 0)]
+    public void Title_matches_are_ranked(string title, int expected)
+    {
+        Assert.Equal(expected, Heroes.MatchQuality(title, "whatever"));
+    }
+
+    [Fact]
+    public void Process_match_counts_as_exact()
+    {
+        var rule = new GameRule { Match = "HeroesOfTheStorm_x64", By = MatchBy.Process };
+
+        Assert.Equal(GameRule.Exact, rule.MatchQuality("anything", "HeroesOfTheStorm_x64"));
+    }
+
+    [Fact]
+    public void FindGame_prefers_the_better_match_over_rule_order()
+    {
+        var settings = GuillotineSettings.FromJson("""
+            { "games": [ { "match": "Storm" }, { "match": "Heroes of the Storm" } ] }
+            """);
+
+        Assert.Equal("Heroes of the Storm", settings.FindGame("Heroes of the Storm", "x")?.Match);
+        Assert.Equal(GameRule.Exact, settings.MatchQuality("Heroes of the Storm", "x"));
+        Assert.Equal(0, settings.MatchQuality("Notepad", "notepad"));
     }
 }

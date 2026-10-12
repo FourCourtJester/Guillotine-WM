@@ -23,17 +23,33 @@ public sealed record GameRule
     public bool? Borderless { get; init; }
     public bool? Topmost { get; init; }
 
+    /// <summary>A title rule matches a window whose title contains <see cref="Match"/>, ignoring case.</summary>
+    public const int TitleContains = 1;
+    /// <summary>The title starts with <see cref="Match"/>.</summary>
+    public const int TitleStartsWith = 2;
+    /// <summary>The title is exactly <see cref="Match"/>, or a process rule matched.</summary>
+    public const int Exact = 3;
+
     /// <summary>
-    /// Title rules match any window whose title contains <see cref="Match"/>. Process rules match the
-    /// process name exactly (".exe" is optional). Both ignore case.
+    /// How well a window matches: 0 for no match, up to <see cref="Exact"/>. Process rules match the
+    /// process name exactly (".exe" is optional); title rules rank exact over prefix over substring,
+    /// so a window titled "Heroes of the Storm" beats a terminal or browser tab that only mentions it.
+    /// Both ignore case.
     /// </summary>
-    public bool Matches(string title, string processName) => By switch
+    public int MatchQuality(string title, string processName)
     {
-        MatchBy.Title => title.Contains(Match, StringComparison.OrdinalIgnoreCase),
-        MatchBy.Process => string.Equals(
-            StripExe(processName), StripExe(Match), StringComparison.OrdinalIgnoreCase),
-        _ => false,
-    };
+        const StringComparison ignoreCase = StringComparison.OrdinalIgnoreCase;
+        return By switch
+        {
+            MatchBy.Process => string.Equals(StripExe(processName), StripExe(Match), ignoreCase) ? Exact : 0,
+            MatchBy.Title when title.Equals(Match, ignoreCase) => Exact,
+            MatchBy.Title when title.StartsWith(Match, ignoreCase) => TitleStartsWith,
+            MatchBy.Title when title.Contains(Match, ignoreCase) => TitleContains,
+            _ => 0,
+        };
+    }
+
+    public bool Matches(string title, string processName) => MatchQuality(title, processName) > 0;
 
     private static string StripExe(string name) =>
         name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
@@ -58,9 +74,26 @@ public sealed record GuillotineSettings
 
     public PixelSize DesiredSize => new(DesiredWidth, DesiredHeight);
 
-    /// <summary>Returns the first game rule matching the window, or null.</summary>
+    /// <summary>The game rule that best matches the window (the first one on a tie), or null.</summary>
     public GameRule? FindGame(string title, string processName) =>
-        Games.FirstOrDefault(game => game.Matches(title, processName));
+        BestMatch(Games, title, processName).Game;
+
+    /// <summary>How well the window matches any configured game (0 for none).</summary>
+    public int MatchQuality(string title, string processName) =>
+        BestMatch(Games, title, processName).Quality;
+
+    /// <summary>The rule from <paramref name="rules"/> that best matches the window, with its quality.</summary>
+    public static (GameRule? Game, int Quality) BestMatch(IEnumerable<GameRule> rules, string title, string processName)
+    {
+        (GameRule? Game, int Quality) best = (null, 0);
+        foreach (var rule in rules)
+        {
+            int quality = rule.MatchQuality(title, processName);
+            if (quality > best.Quality)
+                best = (rule, quality);
+        }
+        return best;
+    }
 
     /// <summary>The global defaults with any overrides from <paramref name="game"/> applied.</summary>
     public Placement PlacementFor(GameRule? game) => new(

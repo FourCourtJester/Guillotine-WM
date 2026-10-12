@@ -226,16 +226,13 @@ internal static class Program
         bool announced = false;
         while (true)
         {
-            var windows = WindowController.GetWindows();
-            foreach (var rule in rules)
+            var matches = WindowController.Find(rules);
+            if (matches.Count > 0)
             {
-                var matches = windows.Where(w => rule.Matches(w.Title, w.ProcessName)).ToList();
-                if (matches.Count == 0)
-                    continue;
-                if (matches.Count > 1)
-                    Console.WriteLine($"note: {matches.Count} windows match {rule.By.ToString().ToLowerInvariant()} \"{rule.Match}\"; using the first. Pass --handle to pick another.");
-
                 var window = matches[0];
+                if (matches.Count > 1)
+                    Console.WriteLine($"note: {matches.Count} windows match {description}; using {window.HandleText} \"{window.Title}\". Pass --handle to pick another.");
+
                 // An explicit --title/--process still picks up per-game overrides from settings.
                 return (window, settings.FindGame(window.Title, window.ProcessName));
             }

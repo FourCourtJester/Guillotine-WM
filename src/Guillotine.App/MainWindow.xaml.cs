@@ -125,10 +125,12 @@ public partial class MainWindow : FluentWindow
         var windows = WindowController.GetWindows();
         WindowList.ItemsSource = windows;
 
-        // Keep the current selection; otherwise pick the first configured game that is running.
+        // Keep the current selection; otherwise pick the running window that best matches a configured game.
         WindowList.SelectedItem =
             windows.FirstOrDefault(w => w.Handle == selected)
-            ?? windows.FirstOrDefault(w => _settings.FindGame(w.Title, w.ProcessName) is not null);
+            ?? windows.Where(w => _settings.MatchQuality(w.Title, w.ProcessName) > 0)
+                      .OrderByDescending(w => _settings.MatchQuality(w.Title, w.ProcessName))
+                      .FirstOrDefault();
     }
 
     private void ShowDetails(WindowInfo window)

@@ -55,6 +55,14 @@ jobs:
                     "`$f = New-Object System.Windows.Forms.Form; `$f.Text = '$title'; `$f.Width = 500; `$f.Height = 400; " +
                     "[System.Windows.Forms.Application]::Run(`$f)"
           $form = Start-Process powershell -PassThru -ArgumentList '-NoProfile', '-Command', $script
+
+          # A second window that caps its own size (like a game that will not grow past the taskbar).
+          $capped = 'Guillotine capped test'
+          $cappedScript = "Add-Type -AssemblyName System.Windows.Forms; " +
+                          "`$f = New-Object System.Windows.Forms.Form; `$f.Text = '$capped'; " +
+                          "`$f.MaximumSize = New-Object System.Drawing.Size(400, 300); " +
+                          "[System.Windows.Forms.Application]::Run(`$f)"
+          $cappedForm = Start-Process powershell -PassThru -ArgumentList '-NoProfile', '-Command', $cappedScript
           try {
             foreach ($flavour in 'all-in-one', 'lean') {
               Write-Host "--- $flavour"
@@ -67,10 +75,17 @@ jobs:
               Invoke-Cli apply --title $title --size 600x400 --zone top-left --framed --no-topmost
               Invoke-Cli borderless on --title $title
               Invoke-Cli restore --title $title
+
+              # Must bypass the window's own 400x300 limit to reach 640x480.
+              $output = Invoke-Cli apply --title $capped --wait --size 640x480 --zone center --borderless
+              $output
+              if (-not ($output -match 'size limits were bypassed')) { throw 'expected the capped window to need a forced resize' }
+              Invoke-Cli restore --title $capped
             }
           }
           finally {
             Stop-Process -Id $form.Id -ErrorAction SilentlyContinue
+            Stop-Process -Id $cappedForm.Id -ErrorAction SilentlyContinue
           }
 
       - uses: actions/upload-artifact@v7

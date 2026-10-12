@@ -21,9 +21,17 @@ public sealed record WindowInfo(
 /// <summary>The outcome of <see cref="WindowController.Apply"/>.</summary>
 /// <param name="Target">Where the client area should be.</param>
 /// <param name="Actual">Where the client area ended up.</param>
-public sealed record ApplyResult(WindowInfo Window, MonitorInfo Monitor, PixelRect Target, PixelRect Actual)
+/// <param name="Forced">
+/// True when the window's own size limits had to be bypassed (the window refused the size when asked normally).
+/// </param>
+public sealed record ApplyResult(WindowInfo Window, MonitorInfo Monitor, PixelRect Target, PixelRect Actual, bool Forced)
 {
     public bool IsExact => Target == Actual;
+
+    /// <summary>A plain-language explanation when the result is not exact; null when it is.</summary>
+    public string? Problem => IsExact
+        ? null
+        : PlacementDiagnostics.ExplainMismatch(Monitor.Bounds, Monitor.WorkArea, Target, Actual);
 }
 
 /// <summary>A Win32 call on a window failed.</summary>

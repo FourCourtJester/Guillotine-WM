@@ -69,13 +69,21 @@ public partial class MainWindow : FluentWindow
 
         Run(() =>
         {
+            // Settings that cannot work together are explained instead of applied.
+            var monitor = Monitors.ForWindow(window.Handle);
+            if (PlacementDiagnostics.CheckFits(monitor.Bounds, monitor.WorkArea, placement.Size, placement.UseWorkArea) is { } fitProblem)
+            {
+                ShowStatus(InfoBarSeverity.Warning, "Size does not fit", fitProblem);
+                return;
+            }
+
             var result = WindowController.Apply(window.Handle, placement);
             if (result.IsExact)
                 ShowStatus(InfoBarSeverity.Success, "Applied",
-                    $"Client area is exactly {result.Actual}.");
+                    $"Client area is exactly {result.Actual}." +
+                    (result.Forced ? " The game refused this size at first, so its size limit was bypassed." : ""));
             else
-                ShowStatus(InfoBarSeverity.Warning, "Client area does not match",
-                    $"Wanted {result.Target}, got {result.Actual}. The game may limit its own size, or DPI scaling may interfere.");
+                ShowStatus(InfoBarSeverity.Warning, "Client area does not match", result.Problem!);
             RefreshWindows();
         });
     }

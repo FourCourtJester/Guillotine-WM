@@ -149,6 +149,9 @@ internal static class Program
                     Topmost = options.Topmost ?? placement.Topmost,
                     UseWorkArea = options.UseWorkArea ?? placement.UseWorkArea,
                 };
+                var monitor = Monitors.ForWindow(window.Handle);
+                if (PlacementDiagnostics.CheckFits(monitor.Bounds, monitor.WorkArea, placement.Size, placement.UseWorkArea) is { } fitProblem)
+                    Console.WriteLine($"warning  {fitProblem}");
                 return PrintApplyResult(WindowController.Apply(window.Handle, placement));
 
             case "borderless":
@@ -260,13 +263,16 @@ internal static class Program
         Console.WriteLine($"Target   client {result.Target}");
         Console.WriteLine($"Actual   client {result.Actual}, window {w.Bounds}{(w.IsBorderless ? ", borderless" : "")}{(w.IsTopmost ? ", topmost" : "")}");
 
+        if (result.Forced)
+            Console.WriteLine("note     the window refused this size when asked normally, so its size limits were bypassed");
+
         if (result.IsExact)
         {
             Console.WriteLine("OK       client area is exactly the target size and position");
             return 0;
         }
 
-        Console.WriteLine("warning  client area does not match the target. The game may limit its own size, or DPI scaling may interfere.");
+        Console.WriteLine($"warning  {result.Problem}");
         return 2;
     }
 

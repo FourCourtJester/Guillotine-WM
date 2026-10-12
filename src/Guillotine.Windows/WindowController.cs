@@ -69,17 +69,27 @@ public static class WindowController
         SetBorderless(hwnd, placement.Borderless);
         SetTopmost(hwnd, placement.Topmost);
 
-        var monitor = Monitors.Get(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST));
+        var monitor = Monitors.ForWindow(hwnd);
         var area = placement.UseWorkArea ? monitor.WorkArea : monitor.Bounds;
         var target = ZoneCalculator.Compute(area, placement.Size, placement.Zone);
 
         // Some windows adjust their frame after the first resize (menus wrapping, DPI changes),
         // so measure the frame again and correct once if the first attempt is off.
-        var actual = MoveClientTo(hwnd, target);
+        var actual = MoveClientTo(hwnd, target, force: false);
         if (actual != target)
-            actual = MoveClientTo(hwnd, target);
+            actual = MoveClientTo(hwnd, target, force: false);
 
-        return new ApplyResult(Describe(hwnd), monitor, target, actual);
+        // Windows and many games cap a window's size while it is being resized (WM_GETMINMAXINFO /
+        // WM_WINDOWPOSCHANGING), often to the space above the taskbar. Skipping that message lets a
+        // full-height window through.
+        bool forced = false;
+        if (actual != target)
+        {
+            forced = true;
+            actual = MoveClientTo(hwnd, target, force: true);
+        }
+
+        return new ApplyResult(Describe(hwnd), monitor, target, actual, forced);
     }
 
     /// <summary>
@@ -146,7 +156,7 @@ public static class WindowController
         return Describe(hwnd);
     }
 
-    private static PixelRect MoveClientTo(IntPtr hwnd, PixelRect target)
+    private static PixelRect MoveClientTo(IntPtr hwnd, PixelRect target, bool force)
     {
         var window = GetBounds(hwnd);
         var client = GetClientScreenRect(hwnd);
@@ -159,7 +169,7 @@ public static class WindowController
         if (!SetWindowPos(hwnd, IntPtr.Zero,
                 target.Left - left, target.Top - top,
                 target.Width + left + right, target.Height + top + bottom,
-                SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED))
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | (force ? SWP_NOSENDCHANGING : 0)))
             throw Win32Failure(hwnd, "move and resize the window");
 
         return GetClientScreenRect(hwnd);

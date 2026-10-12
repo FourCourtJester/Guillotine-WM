@@ -34,6 +34,9 @@ public static class Monitors
         return monitors;
     }
 
+    /// <summary>The monitor a window is on (the nearest one if it is off screen).</summary>
+    public static MonitorInfo ForWindow(IntPtr hwnd) => Get(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST));
+
     public static MonitorInfo Get(IntPtr monitorHandle)
     {
         var info = new MONITORINFOEX { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFOEX>() };

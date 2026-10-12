@@ -52,6 +52,7 @@ internal static class NativeMethods
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint SWP_FRAMECHANGED = 0x0020;
     internal const uint SWP_NOOWNERZORDER = 0x0200;
+    internal const uint SWP_NOSENDCHANGING = 0x0400;
 
     internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 

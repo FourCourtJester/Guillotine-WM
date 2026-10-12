@@ -76,8 +76,9 @@ jobs:
               Invoke-Cli borderless on --title $title
               Invoke-Cli restore --title $title
 
-              # Must bypass the window's own 400x300 limit to reach 640x480.
-              $output = Invoke-Cli apply --title $capped --wait --size 640x480 --zone center --borderless
+              # Windows only enforces a window's size limit (WM_GETMINMAXINFO) while it has a resize frame,
+              # so keep the frame: the CLI must bypass the 400x300 limit to reach 640x480.
+              $output = Invoke-Cli apply --title $capped --wait --size 640x480 --zone center --framed
               $output
               if (-not ($output -match 'size limits were bypassed')) { throw 'expected the capped window to need a forced resize' }
               Invoke-Cli restore --title $capped

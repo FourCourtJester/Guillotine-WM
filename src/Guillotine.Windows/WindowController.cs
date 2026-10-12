@@ -104,7 +104,18 @@ public static class WindowController
             actual = MoveClientTo(hwnd, target, force: true);
         }
 
-        return new ApplyResult(Describe(hwnd), monitor, target, actual, forced);
+        // Some games resize themselves straight back to a size of their own choosing (Heroes of the
+        // Storm keeps 16:9 inside the monitor minus its own frame). Accept that size and put it in
+        // the requested zone instead, so the window is at least where it was asked to be. Moving
+        // without resizing does not set the game's sizing rule off again.
+        PixelRect? fallback = null;
+        if (actual.Size != target.Size)
+        {
+            fallback = ZoneCalculator.Compute(area, actual.Size, placement.Zone);
+            actual = MoveClientTo(hwnd, fallback.Value, force: false);
+        }
+
+        return new ApplyResult(Describe(hwnd), monitor, target, actual, forced, fallback);
     }
 
     /// <summary>

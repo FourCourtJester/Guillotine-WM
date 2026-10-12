@@ -11,7 +11,8 @@ public sealed record KeeperEvent(string Changed, ApplyResult Result);
 /// <summary>
 /// Puts a window back when it changes its own size, position, frame or z-order after being placed,
 /// for games that reset their window. Call <see cref="Check"/> on a timer. After
-/// <see cref="MaxReapplies"/> corrections it stops, so it cannot fight a game forever.
+/// <see cref="MaxReapplies"/> corrections it stops, so it cannot fight a game forever. When the game
+/// insists on its own size, that size (placed in the zone) becomes what is kept.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WindowKeeper(IntPtr hwnd, Placement placement, PixelRect target, int maxReapplies = 10)
@@ -47,7 +48,8 @@ public sealed class WindowKeeper(IntPtr hwnd, Placement placement, PixelRect tar
 
         Reapplies++;
         var result = WindowController.Apply(Handle, Placement);
-        _target = result.Target;
+        // If the game insists on its own size, keep it there rather than fighting it.
+        _target = result.Settled;
         return new KeeperEvent(string.Join(", ", changes), result);
     }
 }

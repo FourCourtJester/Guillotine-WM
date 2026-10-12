@@ -64,6 +64,15 @@ jobs:
                           "[System.Windows.Forms.Application]::Run(`$f)"
           $cappedForm = Start-Process powershell -PassThru -ArgumentList '-NoProfile', '-Command', $cappedScript
 
+          # A window that resizes itself straight back to 400x300 whenever it is resized (like Heroes).
+          $stubborn = 'Guillotine stubborn test'
+          $stubbornScript = "Add-Type -AssemblyName System.Windows.Forms; " +
+                            "`$f = New-Object System.Windows.Forms.Form; `$f.Text = '$stubborn'; " +
+                            "`$size = New-Object System.Drawing.Size(400, 300); `$f.ClientSize = `$size; " +
+                            "`$f.Add_Resize({ if (`$f.ClientSize -ne `$size) { `$f.ClientSize = `$size } }); " +
+                            "[System.Windows.Forms.Application]::Run(`$f)"
+          $stubbornForm = Start-Process powershell -PassThru -ArgumentList '-NoProfile', '-Command', $stubbornScript
+
           # A decoy whose title only contains the target title (like a terminal showing the command line).
           # Started last so it is in front; the exact title must still win.
           Start-Sleep -Seconds 6
@@ -93,12 +102,23 @@ jobs:
               $output
               if (-not ($output -match 'size limits were bypassed')) { throw 'expected the capped window to need a forced resize' }
               Invoke-Cli restore --title $capped
+
+              # The stubborn window keeps 400x300, so it should be centred at that size (exit code 2: not
+              # the requested size) and then left alone while holding.
+              $output = & $cli apply --title $stubborn --wait --size 640x480 --zone center --borderless --hold 2
+              $code = $LASTEXITCODE
+              $output
+              if ($code -ne 2) { throw "expected exit code 2 for a game-chosen size, got $code" }
+              if (-not ($output -match 'Actual   client 400x300 at \(312, 234\)')) { throw 'expected the stubborn window centred at 400x300' }
+              if (-not ($output -match 'corrected 0 time')) { throw 'expected hold to leave the game-chosen size alone' }
+              Invoke-Cli restore --title $stubborn
             }
           }
           finally {
             Stop-Process -Id $form.Id -ErrorAction SilentlyContinue
             Stop-Process -Id $cappedForm.Id -ErrorAction SilentlyContinue
             Stop-Process -Id $decoyForm.Id -ErrorAction SilentlyContinue
+            Stop-Process -Id $stubbornForm.Id -ErrorAction SilentlyContinue
           }
 
       - uses: actions/upload-artifact@v7
@@ -137,3 +157,10 @@ jobs:
         with:
           files: guillotine-*-win-x64-*.zip
           generate_release_notes: true
+          body: |
+            Two downloads, each with `Guillotine.exe` (the app) and `guillotine-cli.exe` (the command line) for 64-bit Windows 10 or 11:
+
+            - **all-in-one**: .NET is bundled inside; nothing to install.
+            - **lean**: much smaller, but needs the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). Windows offers a download link if it is missing.
+
+            Keep `settings.json` next to the exe. See the [README](https://github.com/${{ github.repository }}#readme) for usage.

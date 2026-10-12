@@ -35,7 +35,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Guillotine" ShowMaximize="False">
+        <ui:TitleBar x:Name="AppTitleBar" Grid.Row="0" Title="Guillotine" ShowMaximize="False">
             <ui:TitleBar.Icon>
                 <ui:ImageIcon Source="pack://application:,,,/guillotine.ico" />
             </ui:TitleBar.Icon>

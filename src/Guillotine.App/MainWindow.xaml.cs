@@ -19,6 +19,8 @@ public partial class MainWindow : FluentWindow
     public MainWindow()
     {
         InitializeComponent();
+        if (typeof(MainWindow).Assembly.GetName().Version is { } version)
+            AppTitleBar.Title = $"Guillotine {version.ToString(3)}";
         LoadSettings();
         ShowPlacement(_settings.PlacementFor(null));
     }
@@ -82,6 +84,8 @@ public partial class MainWindow : FluentWindow
                 ShowStatus(InfoBarSeverity.Success, "Applied",
                     $"Client area is exactly {result.Actual}." +
                     (result.Forced ? " The game refused this size at first, so its size limit was bypassed." : ""));
+            else if (result.Fallback is not null && result.Actual == result.Fallback)
+                ShowStatus(InfoBarSeverity.Warning, $"The game chose {result.Actual.Size}", result.Problem!);
             else
                 ShowStatus(InfoBarSeverity.Warning, "Client area does not match", result.Problem!);
             RefreshWindows();

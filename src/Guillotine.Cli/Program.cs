@@ -7,7 +7,9 @@ namespace Guillotine.Cli;
 
 internal static class Program
 {
-    private const string Usage = """
+    private static readonly string Usage = $"""
+        Guillotine {typeof(Program).Assembly.GetName().Version?.ToString(3)}
+
         Usage:
           guillotine-cli zones [options]          Print the derived zones for each monitor (default command)
           guillotine-cli monitors                 Print monitor bounds, work area and DPI scaling
@@ -284,7 +286,7 @@ internal static class Program
     private static int Hold(IntPtr hwnd, Placement placement, ApplyResult first, int seconds)
     {
         Console.WriteLine($"Holding for {seconds} s (Ctrl+C to stop)...");
-        var keeper = new WindowKeeper(hwnd, placement, first.Target);
+        var keeper = new WindowKeeper(hwnd, placement, first.Settled);
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
         while (clock.Elapsed < TimeSpan.FromSeconds(seconds))

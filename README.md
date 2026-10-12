@@ -6,7 +6,7 @@ Borderless, exact-resolution window placement for ultrawide streaming.
 
 Guillotine moves a game window to a zone on your monitor, resizes it to an exact resolution, and removes the title bar and borders so the client area is the full size. The main use is streaming at true 1440p from a super-ultrawide monitor, where window borders would otherwise take pixels off the captured frame.
 
-> **Status:** early. Placement, borderless and always-on-top work from both the app and the command line. Auto-apply on launch, hotkeys and a tray icon are not built yet (see [docs/handoff.md](docs/handoff.md)).
+> **Status:** 0.1.0. Placement, borderless and always-on-top work from both the app and the command line. Auto-apply on launch, hotkeys and a tray icon are not built yet (see [docs/handoff.md](docs/handoff.md)).
 
 ## Download
 
@@ -51,10 +51,13 @@ guillotine-cli apply --process HeroesOfTheStorm_x64 --size 2560x1440 --framed
 guillotine-cli borderless on|off --title "Heroes of the Storm"
 guillotine-cli topmost on|off --title "Heroes of the Storm"
 guillotine-cli restore --title "Heroes of the Storm"
+guillotine-cli apply --title "Heroes of the Storm" --hold 30   # put it back if the game moves or resizes it
 ```
 
 - Target a window with `--title` (part of the title), `--process` (process name) or `--handle` (from `windows`). With no target, the first running game from `settings.json` is used. `--wait` keeps checking until the window appears.
 - `apply` takes `--size`, `--zone`, `--borderless`/`--framed`, `--topmost`/`--no-topmost` and `--work-area` to override the settings. It checks the client area afterwards and exits with code 2 if it does not match.
+- `--hold SECONDS` keeps watching after `apply` and puts the window back whenever the game changes it, logging each correction. It stops after 10 corrections so it never fights a game forever.
+- Title matching prefers an exact title over one that merely contains the text, and never picks the terminal you ran the command from.
 - `zones --monitor 5120x1440` (optionally `5120x1440@X,Y`) uses the bounds you give instead of reading real monitors, so you can check the math on any OS.
 - `monitors` is the quickest way to confirm your monitor is one 5120x1440 display at 100% scaling.
 
@@ -63,6 +66,16 @@ guillotine-cli restore --title "Heroes of the Storm"
 - **Borderless** removes the title bar, resize frame and edge styles and makes the window a popup, so the whole window is client area. The original style is saved on the window itself, so `restore` (from the app or the command line) puts it back exactly.
 - **Framed** keeps the frame and sizes the window so the *client area* is still the exact size and sits on the zone; the frame extends outside it.
 - The window is placed on the monitor it is currently on. Move it to another monitor first to use that one.
+- If the window refuses the size, Guillotine retries while bypassing the window's own size limits.
+- If the game still resizes itself to a size of its own choosing, Guillotine places that size in the requested zone instead and tells you what the game chose.
+
+### Known game behaviour
+
+- **Heroes of the Storm** limits its own window and resizes itself back immediately, so no external tool can override it:
+  - *Windowed*: 16:9, at most the monitor height minus its own title bar and borders (37 px), even when the border has been removed. On a 1440-tall monitor that is **2494x1403**. Sizes that fit, such as 1920x1080, work exactly.
+  - *Windowed (Fullscreen)*: full monitor height, but no wider than 21:9 (3440x1440 on a 1440-tall monitor).
+  - For a 1440p stream from a 1440-tall monitor, run windowed and let OBS scale 2494x1403 up to 2560x1440, or play at 1920x1080 for an exact 1080p stream.
+- **Display scaling** other than 100% can make Windows stretch games that are not DPI aware, which softens the picture. `guillotine-cli monitors` shows the current scaling.
 
 ## Settings
 

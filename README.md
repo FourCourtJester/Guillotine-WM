@@ -120,7 +120,7 @@ dotnet publish src/Guillotine.App -c Release -r win-x64 -p:PublishSingleFile=tru
 dotnet publish src/Guillotine.App -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -o publish/lean
 ```
 
-To publish a release, push a tag such as `v0.1.0`. The Build workflow attaches one zip per flavour to a GitHub release.
+To publish a release, run the **Build** workflow from the Actions tab with a version such as `0.1.0` (or push a tag such as `v0.1.0`). It creates the tag and a GitHub release with one zip per flavour. Update `<Version>` in `Directory.Build.props` first so the exes report the same version.
 
 The icon is drawn by `assets/make_icon.py` (needs Pillow). Run `python3 assets/make_icon.py` to regenerate `assets/guillotine.ico` after changing it.
 

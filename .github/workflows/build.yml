@@ -103,13 +103,20 @@ jobs:
               if (-not ($output -match 'size limits were bypassed')) { throw 'expected the capped window to need a forced resize' }
               Invoke-Cli restore --title $capped
 
-              # The stubborn window keeps 400x300, so it should be centred at that size (exit code 2: not
-              # the requested size) and then left alone while holding.
+              # The stubborn window insists on its own size (WinForms adds the frame it thinks it has, much
+              # like Heroes of the Storm), so it should be centred at that size (exit code 2: not the
+              # requested size) and then left alone while holding.
               $output = & $cli apply --title $stubborn --wait --size 640x480 --zone center --borderless --hold 2
               $code = $LASTEXITCODE
               $output
               if ($code -ne 2) { throw "expected exit code 2 for a game-chosen size, got $code" }
-              if (-not ($output -match 'Actual   client 400x300 at \(312, 234\)')) { throw 'expected the stubborn window centred at 400x300' }
+              if (-not ($output -match 'Placed it in the same zone at that size')) { throw 'expected the game-chosen size to be accepted' }
+              $monitor = ($output | Select-String 'Monitor .* (\d+)x(\d+) at \((-?\d+), (-?\d+)\)').Matches[0].Groups
+              $actual = ($output | Select-String 'Actual   client (\d+)x(\d+) at \((-?\d+), (-?\d+)\)').Matches[0].Groups
+              $w = [int]$actual[1].Value; $h = [int]$actual[2].Value
+              $x = [int]$monitor[3].Value + [math]::Floor(([int]$monitor[1].Value - $w) / 2)
+              $y = [int]$monitor[4].Value + [math]::Floor(([int]$monitor[2].Value - $h) / 2)
+              if ([int]$actual[3].Value -ne $x -or [int]$actual[4].Value -ne $y) { throw "expected ${w}x${h} centred at ($x, $y)" }
               if (-not ($output -match 'corrected 0 time')) { throw 'expected hold to leave the game-chosen size alone' }
               Invoke-Cli restore --title $stubborn
             }

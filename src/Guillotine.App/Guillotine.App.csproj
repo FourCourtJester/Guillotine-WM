@@ -11,6 +11,7 @@
     <AssemblyName>Guillotine</AssemblyName>
     <RootNamespace>Guillotine.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\guillotine.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +21,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Guillotine.Core\Guillotine.Core.csproj" />
     <ProjectReference Include="..\Guillotine.Windows\Guillotine.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\assets\guillotine.ico" Link="guillotine.ico" />
   </ItemGroup>
 
   <ItemGroup>

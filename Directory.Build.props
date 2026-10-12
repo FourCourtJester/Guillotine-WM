@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Ship English framework messages only; the other languages add ~15 MB to self-contained builds. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+</Project>

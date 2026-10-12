@@ -11,6 +11,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>guillotine-cli</AssemblyName>
+    <ApplicationIcon>..\..\assets\guillotine.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

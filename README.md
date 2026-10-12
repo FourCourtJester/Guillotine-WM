@@ -1,3 +1,5 @@
+<img src="assets/guillotine-256.png" width="96" align="right" alt="" />
+
 # Guillotine
 
 Borderless, exact-resolution window placement for ultrawide streaming.
@@ -8,7 +10,14 @@ Guillotine moves a game window to a zone on your monitor, resizes it to an exact
 
 ## Download
 
-Each push builds `Guillotine.exe` (the app) and `guillotine-cli.exe` (the command line) for 64-bit Windows 10 or 11. Get them from the **guillotine-win-x64** artifact on the latest [Build run](../../actions/workflows/build.yml), or from [Releases](../../releases) once a version is tagged. Both are single, self-contained files; .NET does not need to be installed.
+Each build makes `Guillotine.exe` (the app) and `guillotine-cli.exe` (the command line) for 64-bit Windows 10 or 11, in two flavours:
+
+| Flavour | Size | Needs |
+|---|---|---|
+| **all-in-one** | ~65 MB app, ~34 MB CLI | Nothing; .NET is bundled inside |
+| **lean** | ~7 MB app, ~0.3 MB CLI | The [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). If it is missing, Windows offers a download link when you start the app. |
+
+Get them from [Releases](../../releases), or from the `guillotine-win-x64-all-in-one` and `guillotine-win-x64-lean` artifacts on the latest [Build run](../../actions/workflows/build.yml).
 
 Keep `settings.json` next to the exe to set your defaults and games.
 
@@ -89,14 +98,18 @@ Each entry in `games` matches by `title` (part of the window title) or `process`
 
 Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). `dotnet build` and `dotnet test` work on any OS; the app and window commands only run on Windows.
 
-To make the single-file exes yourself:
+To make the single-file exes yourself (use `src/Guillotine.Cli` for the CLI):
 
 ```
-dotnet publish src/Guillotine.App -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
-dotnet publish src/Guillotine.Cli -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish
+# all-in-one
+dotnet publish src/Guillotine.App -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish/all-in-one
+# lean
+dotnet publish src/Guillotine.App -c Release -r win-x64 -p:PublishSingleFile=true --self-contained false -o publish/lean
 ```
 
-To publish a release, push a tag such as `v0.1.0`. The Build workflow attaches a zip of both exes to a GitHub release.
+To publish a release, push a tag such as `v0.1.0`. The Build workflow attaches one zip per flavour to a GitHub release.
+
+The icon is drawn by `assets/make_icon.py` (needs Pillow). Run `python3 assets/make_icon.py` to regenerate `assets/guillotine.ico` after changing it.
 
 ## License
 

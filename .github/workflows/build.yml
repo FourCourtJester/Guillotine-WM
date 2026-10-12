@@ -24,20 +24,25 @@ jobs:
       - name: Test
         run: dotnet test -c Release
 
+      # Two flavours of each exe:
+      #   all-in-one  bundles .NET, nothing to install (large)
+      #   lean        needs the .NET 8 Desktop Runtime installed (small)
       - name: Publish
         shell: pwsh
         run: |
-          foreach ($project in 'src/Guillotine.App', 'src/Guillotine.Cli') {
-            dotnet publish $project -c Release -r win-x64 --self-contained true `
-              -p:PublishSingleFile=true `
-              -p:IncludeNativeLibrariesForSelfExtract=true `
-              -p:EnableCompressionInSingleFile=true `
-              -p:DebugType=none `
-              -o publish
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $flavours = @{
+            'all-in-one' = @('--self-contained', 'true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:EnableCompressionInSingleFile=true')
+            'lean'       = @('--self-contained', 'false')
           }
-          Copy-Item README.md, LICENSE publish/
-          Get-ChildItem publish
+          foreach ($flavour in $flavours.Keys) {
+            foreach ($project in 'src/Guillotine.App', 'src/Guillotine.Cli') {
+              dotnet publish $project -c Release -r win-x64 -p:PublishSingleFile=true -p:DebugType=none `
+                @($flavours[$flavour]) -o "publish/$flavour"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            Copy-Item README.md, LICENSE "publish/$flavour/"
+          }
+          Get-ChildItem publish -Recurse -File | Format-Table FullName, @{ n = 'MB'; e = { [math]::Round($_.Length / 1MB, 1) } }
 
       # Opens a plain window and runs the published CLI against it, so the Win32 code
       # is exercised on a real Windows desktop on every push.
@@ -51,15 +56,18 @@ jobs:
                     "[System.Windows.Forms.Application]::Run(`$f)"
           $form = Start-Process powershell -PassThru -ArgumentList '-NoProfile', '-Command', $script
           try {
-            $cli = './publish/guillotine-cli.exe'
-            function Invoke-Cli { & $cli @args; if ($LASTEXITCODE -ne 0) { throw "guillotine-cli $args exited with $LASTEXITCODE" } }
+            foreach ($flavour in 'all-in-one', 'lean') {
+              Write-Host "--- $flavour"
+              $cli = "./publish/$flavour/guillotine-cli.exe"
+              function Invoke-Cli { & $cli @args; if ($LASTEXITCODE -ne 0) { throw "$cli $args exited with $LASTEXITCODE" } }
 
-            Invoke-Cli monitors
-            Invoke-Cli apply --title $title --wait --size 640x480 --zone center --borderless --topmost
-            Invoke-Cli windows
-            Invoke-Cli apply --title $title --size 600x400 --zone top-left --framed --no-topmost
-            Invoke-Cli borderless on --title $title
-            Invoke-Cli restore --title $title
+              Invoke-Cli monitors
+              Invoke-Cli apply --title $title --wait --size 640x480 --zone center --borderless --topmost
+              Invoke-Cli windows
+              Invoke-Cli apply --title $title --size 600x400 --zone top-left --framed --no-topmost
+              Invoke-Cli borderless on --title $title
+              Invoke-Cli restore --title $title
+            }
           }
           finally {
             Stop-Process -Id $form.Id -ErrorAction SilentlyContinue
@@ -67,8 +75,14 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: guillotine-win-x64
-          path: publish/
+          name: guillotine-win-x64-all-in-one
+          path: publish/all-in-one/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: guillotine-win-x64-lean
+          path: publish/lean/
           if-no-files-found: error
 
   release:
@@ -80,13 +94,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: guillotine-win-x64
-          path: guillotine
+          pattern: guillotine-win-x64-*
+          path: artifacts
 
       - name: Zip
-        run: cd guillotine && zip -r "../guillotine-${GITHUB_REF_NAME}-win-x64.zip" .
+        run: |
+          for dir in artifacts/*/; do
+            flavour=$(basename "$dir" | sed 's/^guillotine-win-x64-//')
+            (cd "$dir" && zip -r "$GITHUB_WORKSPACE/guillotine-${GITHUB_REF_NAME}-win-x64-${flavour}.zip" .)
+          done
+          ls -la *.zip
 
       - uses: softprops/action-gh-release@v3
         with:
-          files: guillotine-*-win-x64.zip
+          files: guillotine-*-win-x64-*.zip
           generate_release_notes: true

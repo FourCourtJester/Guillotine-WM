@@ -6,6 +6,8 @@
     Title="Guillotine"
     Icon="pack://application:,,,/guillotine.ico"
     Width="380"
+    MinWidth="0"
+    MinHeight="0"
     SizeToContent="Height"
     ResizeMode="NoResize"
     ShowInTaskbar="False"

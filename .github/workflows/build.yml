@@ -191,6 +191,7 @@ jobs:
               Write-Host "screen $($screen.Bounds), work area $($screen.WorkingArea)"
               if ($r[2] -le $screen.Bounds.Width / 2 -or $r[3] -le $screen.Bounds.Height / 2) { throw 'the flyout is not in the bottom-right corner' }
               if ($r[3] -gt $screen.WorkingArea.Bottom) { throw 'the flyout overlaps the taskbar' }
+              if ($r[2] - $r[0] -gt 400) { throw "the flyout is $($r[2] - $r[0]) px wide; expected about 380" }
 
               [Probe]::CtrlAltG(); Start-Sleep -Seconds 1
               $state = [Probe]::Flyout($app.Id); Write-Host "after hotkey: $state"

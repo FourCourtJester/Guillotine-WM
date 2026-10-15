@@ -56,6 +56,7 @@ public partial class MainWindow : FluentWindow
 
         ShowPlacement(_store.Settings.PlacementFor(null));
         StartupSwitch.IsChecked = StartupRegistration.IsEnabled;
+        UpdateWindowControls();
     }
 
     // ---- Showing and hiding -------------------------------------------------------------------
@@ -167,11 +168,9 @@ public partial class MainWindow : FluentWindow
 
     private void OnWindowSelected(object sender, SelectionChangedEventArgs e)
     {
+        UpdateWindowControls();
         if (WindowList.SelectedItem is not WindowInfo window)
-        {
-            WindowDetails.Text = "";
             return;
-        }
 
         if (window.Handle != _placementWindow)
         {
@@ -194,6 +193,20 @@ public partial class MainWindow : FluentWindow
             ?? windows.Where(w => _store.Settings.MatchQuality(w.Title, w.ProcessName) > 0)
                       .OrderByDescending(w => _store.Settings.MatchQuality(w.Title, w.ProcessName))
                       .FirstOrDefault();
+    }
+
+    /// <summary>Shows the placeholder and disables the window controls while no window is selected.</summary>
+    private void UpdateWindowControls()
+    {
+        bool selected = WindowList.SelectedItem is WindowInfo;
+        WindowPlaceholder.Visibility = selected ? Visibility.Collapsed : Visibility.Visible;
+        WindowControls.IsEnabled = selected;
+        if (!selected)
+        {
+            WindowDetails.Text = WindowList.Items.Count == 0 ? "No windows found." : "Pick a window to size and place it.";
+            BorderlessSwitch.IsChecked = false;
+            TopmostSwitch.IsChecked = false;
+        }
     }
 
     /// <summary>Shows the window's size and mirrors its live borderless and topmost state in the switches.</summary>

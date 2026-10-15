@@ -63,6 +63,9 @@
                        Icon="{ui:SymbolIcon Dismiss20}" Click="OnHideClicked" />
         </Grid>
 
+        <!-- Notifications sit at the top: the flyout grows upward from the taskbar, so nothing below moves. -->
+        <ui:InfoBar x:Name="Status" Margin="0,10,0,0" IsClosable="True" IsOpen="False" />
+
         <!-- Target window -->
         <TextBlock Style="{StaticResource SectionHeader}" Text="Window" />
         <Grid>
@@ -81,78 +84,84 @@
                     </DataTemplate>
                 </ComboBox.ItemTemplate>
             </ComboBox>
+            <TextBlock x:Name="WindowPlaceholder" Grid.Column="0" Margin="13,0,36,0" VerticalAlignment="Center"
+                       IsHitTestVisible="False" Text="No window selected"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
             <ui:Button Grid.Column="1" Margin="6,0,0,0" Padding="8" ToolTip="Refresh the window list"
                        Icon="{ui:SymbolIcon ArrowSync20}" Click="OnRefreshClicked" />
         </Grid>
         <TextBlock x:Name="WindowDetails" Style="{StaticResource Hint}" Margin="2,4,0,0" />
 
-        <!-- Size -->
-        <TextBlock Style="{StaticResource SectionHeader}" Text="Client size" />
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <ui:NumberBox x:Name="WidthBox" Grid.Column="0" Minimum="1" Maximum="32768" MaxDecimalPlaces="0"
-                          SmallChange="1" LargeChange="10" PlaceholderText="Width" SpinButtonPlacementMode="Hidden" />
-            <TextBlock Grid.Column="1" Margin="8,0" VerticalAlignment="Center" Text="×" />
-            <ui:NumberBox x:Name="HeightBox" Grid.Column="2" Minimum="1" Maximum="32768" MaxDecimalPlaces="0"
-                          SmallChange="1" LargeChange="10" PlaceholderText="Height" SpinButtonPlacementMode="Hidden" />
-        </Grid>
-        <UniformGrid Margin="0,6,0,0" Rows="1">
-            <ui:Button Margin="0,0,4,0" HorizontalAlignment="Stretch" Content="2560×1440" Tag="2560x1440" Click="OnPresetClicked" />
-            <ui:Button Margin="2,0,2,0" HorizontalAlignment="Stretch" Content="1920×1080" Tag="1920x1080" Click="OnPresetClicked" />
-            <ui:Button Margin="4,0,0,0" HorizontalAlignment="Stretch" Content="1280×720" Tag="1280x720" Click="OnPresetClicked" />
-        </UniformGrid>
+        <!-- Everything below acts on the selected window and is disabled until one is picked. -->
+        <StackPanel x:Name="WindowControls">
 
-        <!-- Zone and switches side by side -->
-        <Grid Margin="0,12,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+            <!-- Size -->
+            <TextBlock Style="{StaticResource SectionHeader}" Text="Client size" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ui:NumberBox x:Name="WidthBox" Grid.Column="0" Minimum="1" Maximum="32768" MaxDecimalPlaces="0"
+                              SmallChange="1" LargeChange="10" PlaceholderText="Width" SpinButtonPlacementMode="Hidden" />
+                <TextBlock Grid.Column="1" Margin="8,0" VerticalAlignment="Center" Text="×" />
+                <ui:NumberBox x:Name="HeightBox" Grid.Column="2" Minimum="1" Maximum="32768" MaxDecimalPlaces="0"
+                              SmallChange="1" LargeChange="10" PlaceholderText="Height" SpinButtonPlacementMode="Hidden" />
+            </Grid>
+            <UniformGrid Margin="0,6,0,0" Rows="1">
+                <ui:Button Margin="0,0,4,0" HorizontalAlignment="Stretch" Content="2560×1440" Tag="2560x1440" Click="OnPresetClicked" />
+                <ui:Button Margin="2,0,2,0" HorizontalAlignment="Stretch" Content="1920×1080" Tag="1920x1080" Click="OnPresetClicked" />
+                <ui:Button Margin="4,0,0,0" HorizontalAlignment="Stretch" Content="1280×720" Tag="1280x720" Click="OnPresetClicked" />
+            </UniformGrid>
 
-            <StackPanel Grid.Column="0">
-                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,0,0,6" Text="Zone" />
-                <UniformGrid x:Name="ZoneGrid" Rows="3" Columns="3">
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="top-left" Content="↖" ToolTip="Top left" />
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="top" Content="↑" ToolTip="Top" />
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="top-right" Content="↗" ToolTip="Top right" />
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="left" Content="←" ToolTip="Left" />
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="center" Content="●" ToolTip="Center" />
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="right" Content="→" ToolTip="Right" />
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom-left" Content="↙" ToolTip="Bottom left" />
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom" Content="↓" ToolTip="Bottom" />
-                    <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom-right" Content="↘" ToolTip="Bottom right" />
-                </UniformGrid>
-            </StackPanel>
+            <!-- Zone and switches side by side -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="1" Margin="16,0,0,0">
-                <TextBlock Style="{StaticResource SectionHeader}" Margin="0,0,0,6" Text="Window options" />
-                <ui:ToggleSwitch x:Name="BorderlessSwitch" Content="Borderless" Click="OnBorderlessClicked"
-                                 ToolTip="Removes or restores the title bar and borders right away; the game picture stays put." />
-                <ui:ToggleSwitch x:Name="TopmostSwitch" Margin="0,8,0,0" Content="Always on top" Click="OnTopmostClicked"
-                                 ToolTip="Takes effect right away." />
-                <ui:ToggleSwitch x:Name="WorkAreaSwitch" Margin="0,8,0,0" Content="Clear of taskbar"
-                                 ToolTip="Used by Apply: compute zones from the space the taskbar leaves free." />
-            </StackPanel>
-        </Grid>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource SectionHeader}" Margin="0,0,0,6" Text="Zone" />
+                    <UniformGrid x:Name="ZoneGrid" Rows="3" Columns="3">
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="top-left" Content="↖" ToolTip="Top left" />
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="top" Content="↑" ToolTip="Top" />
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="top-right" Content="↗" ToolTip="Top right" />
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="left" Content="←" ToolTip="Left" />
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="center" Content="●" ToolTip="Center" />
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="right" Content="→" ToolTip="Right" />
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom-left" Content="↙" ToolTip="Bottom left" />
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom" Content="↓" ToolTip="Bottom" />
+                        <RadioButton Style="{StaticResource ZoneButton}" Tag="bottom-right" Content="↘" ToolTip="Bottom right" />
+                    </UniformGrid>
+                </StackPanel>
 
-        <ui:InfoBar x:Name="Status" Margin="0,12,0,0" IsClosable="True" IsOpen="False" />
+                <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                    <TextBlock Style="{StaticResource SectionHeader}" Margin="0,0,0,6" Text="Window options" />
+                    <ui:ToggleSwitch x:Name="BorderlessSwitch" Content="Borderless" Click="OnBorderlessClicked"
+                                     ToolTip="Removes or restores the title bar and borders right away; the game picture stays put." />
+                    <ui:ToggleSwitch x:Name="TopmostSwitch" Margin="0,8,0,0" Content="Always on top" Click="OnTopmostClicked"
+                                     ToolTip="Takes effect right away." />
+                    <ui:ToggleSwitch x:Name="WorkAreaSwitch" Margin="0,8,0,0" Content="Clear of taskbar"
+                                     ToolTip="Used by Apply: compute zones from the space the taskbar leaves free." />
+                </StackPanel>
+            </Grid>
 
-        <Grid Margin="0,12,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <ui:Button Grid.Column="0" Margin="0,0,4,0" HorizontalAlignment="Stretch" Content="Restore"
-                       ToolTip="Put back the title bar and borders and turn off always on top"
-                       Icon="{ui:SymbolIcon ArrowReset20}" Click="OnRestoreClicked" />
-            <ui:Button Grid.Column="1" Margin="4,0,0,0" HorizontalAlignment="Stretch" Appearance="Primary" Content="Apply"
-                       ToolTip="Move and resize the window to the size and zone"
-                       Icon="{ui:SymbolIcon Crop20}" Click="OnApplyClicked" />
-        </Grid>
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ui:Button Grid.Column="0" Margin="0,0,4,0" HorizontalAlignment="Stretch" Content="Restore"
+                           ToolTip="Put back the title bar and borders and turn off always on top"
+                           Icon="{ui:SymbolIcon ArrowReset20}" Click="OnRestoreClicked" />
+                <ui:Button Grid.Column="1" Margin="4,0,0,0" HorizontalAlignment="Stretch" Appearance="Primary" Content="Apply"
+                           ToolTip="Move and resize the window to the size and zone"
+                           Icon="{ui:SymbolIcon Crop20}" Click="OnApplyClicked" />
+            </Grid>
+
+        </StackPanel>
 
         <!-- App settings -->
         <Separator Margin="0,16,0,4" />

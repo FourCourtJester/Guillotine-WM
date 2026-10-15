@@ -18,6 +18,7 @@ internal static class Program
           guillotine-cli borderless on|off [target]
           guillotine-cli topmost on|off [target]
           guillotine-cli restore [target]         Put back the original frame and clear always on top
+          guillotine-cli startup on|off|status    Start the app (Guillotine.exe) in the tray when you sign in
 
         Target (default: the first running game from settings.json):
           --title TEXT        Window whose title contains TEXT
@@ -70,6 +71,9 @@ internal static class Program
     {
         var queue = new Queue<string>(args);
         var command = queue.Count > 0 && !queue.Peek().StartsWith('-') ? queue.Dequeue() : "zones";
+        if (command == "startup")
+            return RunStartup(queue.Count > 0 ? queue.Dequeue() : "status");
+
         var options = new Options
         {
             Toggle = command is "borderless" or "topmost" ? ParseOnOff(queue, command) : null,
@@ -121,6 +125,28 @@ internal static class Program
         }
     }
 
+    private static int RunStartup(string action)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new ArgumentException("`startup` needs Windows.");
+
+        if (action is "on" or "off")
+        {
+            var app = StartupRegistration.DefaultAppPath;
+            if (action == "on" && !File.Exists(app))
+                throw new ArgumentException($"Guillotine.exe was not found next to guillotine-cli ({app}).");
+            if (StartupRegistration.Set(action == "on", app) is { } error)
+                throw new IOException(error);
+        }
+        else if (action != "status")
+        {
+            throw new ArgumentException("Use `guillotine-cli startup on`, `off` or `status`.");
+        }
+
+        Console.WriteLine($"Start with Windows: {StartupRegistration.Describe()}");
+        return 0;
+    }
+
     [SupportedOSPlatform("windows")]
     private static int RunOnWindows(string command, Options options)
     {
@@ -163,8 +189,7 @@ internal static class Program
                 return options.HoldSeconds > 0 ? Hold(window.Handle, placement, result, options.HoldSeconds) : exitCode;
 
             case "borderless":
-                WindowController.SetBorderless(window.Handle, options.Toggle!.Value);
-                PrintWindows([WindowController.Describe(window.Handle)]);
+                PrintWindows([WindowController.SetBorderlessKeepingClient(window.Handle, options.Toggle!.Value)]);
                 return 0;
 
             case "topmost":

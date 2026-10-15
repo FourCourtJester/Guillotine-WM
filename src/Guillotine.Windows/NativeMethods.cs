@@ -154,6 +154,47 @@ internal static class NativeMethods
     [DllImport("kernel32.dll")]
     internal static extern IntPtr GetConsoleWindow();
 
+    [DllImport("user32.dll")]
+    internal static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetMenu(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool AdjustWindowRectExForDpi(ref RECT lpRect, uint dwStyle,
+        [MarshalAs(UnmanagedType.Bool)] bool bMenu, uint dwExStyle, uint dpi);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    internal const uint MOD_NOREPEAT = 0x4000;
+    internal const int WM_HOTKEY = 0x0312;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct APPBARDATA
+    {
+        public int cbSize;
+        public IntPtr hWnd;
+        public uint uCallbackMessage;
+        public uint uEdge;
+        public RECT rc;
+        public IntPtr lParam;
+    }
+
+    internal const uint ABM_GETTASKBARPOS = 0x00000005;
+
+    [DllImport("shell32.dll")]
+    internal static extern UIntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr MonitorFromRect(ref RECT lprc, uint dwFlags);
+
     internal const uint TH32CS_SNAPPROCESS = 0x00000002;
     internal static readonly IntPtr INVALID_HANDLE_VALUE = new(-1);
 

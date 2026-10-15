@@ -67,6 +67,9 @@ public sealed record GuillotineSettings
     public bool Borderless { get; init; } = true;
     public bool Topmost { get; init; } = false;
 
+    /// <summary>Global hotkey that shows or hides the app's flyout, such as "Ctrl+Alt+G". Empty turns it off.</summary>
+    public string Hotkey { get; init; } = Core.Hotkey.Default.ToString();
+
     /// <summary>When true, zones are computed from the work area (excluding the taskbar) instead of the full monitor.</summary>
     public bool UseWorkArea { get; init; } = false;
 
@@ -130,6 +133,8 @@ public sealed record GuillotineSettings
     {
         if (DesiredWidth <= 0 || DesiredHeight <= 0)
             throw new InvalidDataException("desiredWidth and desiredHeight must be positive.");
+        if (!string.IsNullOrEmpty(Hotkey) && !Core.Hotkey.TryParse(Hotkey, out _))
+            throw new InvalidDataException($"hotkey '{Hotkey}' is not valid; use something like Ctrl+Alt+G.");
         if (!Core.Zone.TryParse(DefaultZone, out _))
             throw new InvalidDataException($"defaultZone '{DefaultZone}' is not a known zone.");
 

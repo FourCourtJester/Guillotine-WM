@@ -6,7 +6,7 @@ Borderless, exact-resolution window placement for ultrawide streaming.
 
 Guillotine moves a game window to a zone on your monitor, resizes it to an exact resolution, and removes the title bar and borders so the client area is the full size. The main use is streaming at true 1440p from a super-ultrawide monitor, where window borders would otherwise take pixels off the captured frame.
 
-> **Status:** 0.1.0. Placement, borderless and always-on-top work from both the app and the command line. Auto-apply on launch, custom presets, hotkeys and a tray icon are not built yet (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+> **Status:** 0.2.0. Placement, borderless and always-on-top work from the tray app and the command line. Auto-apply on launch and custom presets are not built yet (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 ## Download
 
@@ -19,16 +19,24 @@ Each build makes `Guillotine.exe` (the app) and `guillotine-cli.exe` (the comman
 
 Get them from [Releases](../../releases), or from the `guillotine-win-x64-all-in-one` and `guillotine-win-x64-lean` artifacts on the latest [Build run](../../actions/workflows/build.yml).
 
-Keep `settings.json` next to the exe to set your defaults and games.
+Keep `settings.json` next to the exe to set your defaults and games. If that folder is not writable (for example under Program Files), the app saves its settings to `%APPDATA%\Guillotine\settings.json` instead.
 
 ## Using the app
 
-1. Start the game in windowed mode, then open `Guillotine.exe`.
-2. Pick the game from the window list. A game listed in `settings.json` is picked automatically, along with its settings.
-3. Choose the client size, the zone and the options, then click **Apply**. The status bar confirms that the client area is exactly the size you asked for.
-4. **Restore** puts the title bar and borders back and turns off always on top.
+Guillotine lives in the notification area (system tray). **Left-click its icon**, or press **Ctrl+Alt+G**, to open a small panel above the tray; it stays above every other window, including always-on-top games, and hides again when you click elsewhere or press Esc. Right-click the icon for Open and Exit.
 
-If the game runs as administrator, run Guillotine as administrator too, or Windows will block the changes.
+1. Start the game in windowed mode, then open the panel.
+2. Pick the game from the window list. A game listed in `settings.json` is picked automatically, along with its size and zone.
+3. **Borderless** and **Always on top** act immediately on the selected window. Turning borderless on or off keeps the game picture exactly where it is; only the title bar and borders come and go.
+4. Choose the client size and zone, then click **Apply**. The status bar confirms that the client area is exactly the size you asked for, or says what the game chose instead.
+5. **Restore** puts the title bar and borders back and turns off always on top.
+
+At the bottom of the panel:
+
+- **Hotkey**: click it and press a new combination (it needs Ctrl, Alt or Win). Esc cancels; Backspace turns the hotkey off. It is saved to `settings.json`.
+- **Start with Windows**: starts Guillotine hidden in the tray when you sign in. If Guillotine is running as administrator when you turn this on, it registers a scheduled task that starts it as administrator, so it can still control games that run as administrator.
+
+Launching Guillotine again while it is running just opens the panel. If the game runs as administrator, run Guillotine as administrator too, or Windows will block the changes.
 
 ## How zones work
 
@@ -52,6 +60,7 @@ guillotine-cli borderless on|off --title "Heroes of the Storm"
 guillotine-cli topmost on|off --title "Heroes of the Storm"
 guillotine-cli restore --title "Heroes of the Storm"
 guillotine-cli apply --title "Heroes of the Storm" --hold 30   # put it back if the game moves or resizes it
+guillotine-cli startup on|off|status                           # start the app in the tray when you sign in
 ```
 
 - Target a window with `--title` (part of the title), `--process` (process name) or `--handle` (from `windows`). With no target, the first running game from `settings.json` is used. `--wait` keeps checking until the window appears.

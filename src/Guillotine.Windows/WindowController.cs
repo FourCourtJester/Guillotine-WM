@@ -131,28 +131,7 @@ public static class WindowController
         if (borderless == WindowStyles.IsBorderless(style))
             return;
 
-        uint newStyle, newExStyle;
-        if (borderless)
-        {
-            if (GetProp(hwnd, SavedMarkerProp) == IntPtr.Zero)
-            {
-                SetProp(hwnd, SavedStyleProp, new IntPtr(unchecked((int)style)));
-                SetProp(hwnd, SavedExStyleProp, new IntPtr(unchecked((int)exStyle)));
-                SetProp(hwnd, SavedMarkerProp, new IntPtr(1));
-            }
-            (newStyle, newExStyle) = WindowStyles.MakeBorderless(style, exStyle);
-        }
-        else if (GetProp(hwnd, SavedMarkerProp) != IntPtr.Zero)
-        {
-            newStyle = unchecked((uint)GetProp(hwnd, SavedStyleProp).ToInt32());
-            newExStyle = unchecked((uint)GetProp(hwnd, SavedExStyleProp).ToInt32());
-            // Keep the current topmost state; that is toggled separately.
-            newExStyle = (newExStyle & ~WindowStyles.WS_EX_TOPMOST) | (exStyle & WindowStyles.WS_EX_TOPMOST);
-        }
-        else
-        {
-            (newStyle, newExStyle) = WindowStyles.MakeFramed(style, exStyle);
-        }
+        var (newStyle, newExStyle) = ComputeFrameStyles(hwnd, borderless);
 
         if (!SetWindowStyle(hwnd, GWL_STYLE, newStyle) || !SetWindowStyle(hwnd, GWL_EXSTYLE, newExStyle))
             throw Win32Failure(hwnd, "change the window style");
@@ -166,6 +145,49 @@ public static class WindowController
             throw Win32Failure(hwnd, "redraw the window frame");
     }
 
+    /// <summary>
+    /// Removes or restores the title bar and borders while keeping the client area (the game picture)
+    /// exactly where it is: the outer window shrinks to the client area or grows around it. The style
+    /// and the new outer rectangle are applied in one step, so the game never sees an in-between size.
+    /// A restored frame is kept on the monitor where possible.
+    /// </summary>
+    public static WindowInfo SetBorderlessKeepingClient(IntPtr hwnd, bool borderless)
+    {
+        EnsureWindow(hwnd);
+        uint style = GetWindowStyle(hwnd, GWL_STYLE);
+        if (borderless == WindowStyles.IsBorderless(style))
+            return Describe(hwnd);
+
+        var client = GetClientScreenRect(hwnd);
+        var (newStyle, newExStyle) = ComputeFrameStyles(hwnd, borderless);
+        if (!SetWindowStyle(hwnd, GWL_STYLE, newStyle) || !SetWindowStyle(hwnd, GWL_EXSTYLE, newExStyle))
+            throw Win32Failure(hwnd, "change the window style");
+        if (!borderless)
+            ClearSavedStyles(hwnd);
+
+        var outer = borderless ? client : OuterRectFor(hwnd, client, newStyle, newExStyle);
+        if (!borderless)
+            outer = KeepOnMonitor(outer, Monitors.ForWindow(hwnd).Bounds);
+
+        if (!SetWindowPos(hwnd, IntPtr.Zero, outer.Left, outer.Top, outer.Width, outer.Height,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED))
+            throw Win32Failure(hwnd, "redraw the window frame");
+
+        // If the estimate was off (unusual frames), correct the client size without moving it again.
+        var now = GetClientScreenRect(hwnd);
+        if (now.Size != client.Size)
+            MoveClientTo(hwnd, new PixelRect(now.Left, now.Top, client.Width, client.Height), force: false);
+
+        return Describe(hwnd);
+    }
+
+    /// <summary>Moves a window (for example Guillotine's own flyout) without resizing or activating it.</summary>
+    public static void MoveWindow(IntPtr hwnd, int x, int y, bool topmost)
+    {
+        SetWindowPos(hwnd, topmost ? HWND_TOPMOST : IntPtr.Zero, x, y, 0, 0,
+            SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | (topmost ? 0 : SWP_NOZORDER));
+    }
+
     public static void SetTopmost(IntPtr hwnd, bool topmost)
     {
         EnsureWindow(hwnd);
@@ -174,12 +196,60 @@ public static class WindowController
             throw Win32Failure(hwnd, topmost ? "make the window always on top" : "clear always on top");
     }
 
-    /// <summary>Puts back the original frame and turns off always on top.</summary>
+    /// <summary>Puts back the original frame (around the current client area) and turns off always on top.</summary>
     public static WindowInfo Restore(IntPtr hwnd)
     {
-        SetBorderless(hwnd, false);
+        SetBorderlessKeepingClient(hwnd, false);
         SetTopmost(hwnd, false);
         return Describe(hwnd);
+    }
+
+    /// <summary>
+    /// The styles for the requested frame state. Going borderless saves the current styles on the window
+    /// (once); restoring uses them, or a standard frame if none were saved. The topmost bit is kept.
+    /// </summary>
+    private static (uint Style, uint ExStyle) ComputeFrameStyles(IntPtr hwnd, bool borderless)
+    {
+        uint style = GetWindowStyle(hwnd, GWL_STYLE);
+        uint exStyle = GetWindowStyle(hwnd, GWL_EXSTYLE);
+
+        if (borderless)
+        {
+            if (GetProp(hwnd, SavedMarkerProp) == IntPtr.Zero)
+            {
+                SetProp(hwnd, SavedStyleProp, new IntPtr(unchecked((int)style)));
+                SetProp(hwnd, SavedExStyleProp, new IntPtr(unchecked((int)exStyle)));
+                SetProp(hwnd, SavedMarkerProp, new IntPtr(1));
+            }
+            return WindowStyles.MakeBorderless(style, exStyle);
+        }
+
+        if (GetProp(hwnd, SavedMarkerProp) != IntPtr.Zero)
+        {
+            uint savedStyle = unchecked((uint)GetProp(hwnd, SavedStyleProp).ToInt32());
+            uint savedExStyle = unchecked((uint)GetProp(hwnd, SavedExStyleProp).ToInt32());
+            return (savedStyle, (savedExStyle & ~WindowStyles.WS_EX_TOPMOST) | (exStyle & WindowStyles.WS_EX_TOPMOST));
+        }
+
+        return WindowStyles.MakeFramed(style, exStyle);
+    }
+
+    /// <summary>The outer window rectangle that gives <paramref name="client"/> with the given frame styles.</summary>
+    private static PixelRect OuterRectFor(IntPtr hwnd, PixelRect client, uint style, uint exStyle)
+    {
+        var rect = new RECT { Left = client.Left, Top = client.Top, Right = client.Right, Bottom = client.Bottom };
+        uint dpi = GetDpiForWindow(hwnd);
+        if (!AdjustWindowRectExForDpi(ref rect, style, GetMenu(hwnd) != IntPtr.Zero, exStyle, dpi == 0 ? 96 : dpi))
+            return client;
+        return PixelRect.FromEdges(rect.Left, rect.Top, rect.Right, rect.Bottom);
+    }
+
+    /// <summary>Shifts <paramref name="rect"/> inside <paramref name="area"/> when it fits, so a restored title bar is reachable.</summary>
+    private static PixelRect KeepOnMonitor(PixelRect rect, PixelRect area)
+    {
+        int x = rect.Width <= area.Width ? Math.Clamp(rect.Left, area.Left, area.Right - rect.Width) : rect.Left;
+        int y = rect.Height <= area.Height ? Math.Clamp(rect.Top, area.Top, area.Bottom - rect.Height) : Math.Max(rect.Top, area.Top);
+        return rect with { Left = x, Top = y };
     }
 
     private static PixelRect MoveClientTo(IntPtr hwnd, PixelRect target, bool force)

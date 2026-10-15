@@ -133,6 +133,94 @@ jobs:
             Stop-Process -Id $stubbornForm.Id -ErrorAction SilentlyContinue
           }
 
+      # Runs the real app: the flyout must open above the taskbar, the default hotkey must hide and
+      # show it, a second launch must not start a second copy, and start-with-Windows must register.
+      - name: Smoke test the app
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          Add-Type -TypeDefinition @"
+          using System; using System.Text; using System.Runtime.InteropServices;
+          public static class Probe {
+              delegate bool EnumProc(IntPtr h, IntPtr l);
+              [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
+              [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+              [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+              [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+              [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+              public struct RECT { public int Left, Top, Right, Bottom; }
+              // "visible L,T,R,B", "hidden" or "none" for the window titled Guillotine in process pid.
+              public static string Flyout(int pid) {
+                  string result = "none";
+                  EnumWindows((h, l) => {
+                      uint p; GetWindowThreadProcessId(h, out p);
+                      var title = new StringBuilder(64); GetWindowText(h, title, 64);
+                      if (p == pid && title.ToString() == "Guillotine") {
+                          RECT r; GetWindowRect(h, out r);
+                          result = IsWindowVisible(h) ? "visible " + r.Left + "," + r.Top + "," + r.Right + "," + r.Bottom : "hidden";
+                          return false;
+                      }
+                      return true;
+                  }, IntPtr.Zero);
+                  return result;
+              }
+              public static void CtrlAltG() {
+                  keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 0, UIntPtr.Zero);
+                  keybd_event(0x47, 0, 0, UIntPtr.Zero); keybd_event(0x47, 0, 2, UIntPtr.Zero);
+                  keybd_event(0x12, 0, 2, UIntPtr.Zero); keybd_event(0x11, 0, 2, UIntPtr.Zero);
+              }
+          }
+          "@
+          $crashLog = Join-Path $env:LOCALAPPDATA 'Guillotine\crash.log'
+          Remove-Item $crashLog -ErrorAction SilentlyContinue
+
+          foreach ($flavour in 'all-in-one', 'lean') {
+            Write-Host "--- $flavour"
+            $app = Start-Process "./publish/$flavour/Guillotine.exe" -PassThru
+            try {
+              Start-Sleep -Seconds 6
+              if ($app.HasExited) { throw "the app exited with code $($app.ExitCode)" }
+              if (Test-Path $crashLog) { Get-Content $crashLog; throw 'the app logged a crash' }
+
+              $state = [Probe]::Flyout($app.Id); Write-Host "flyout: $state"
+              if ($state -notlike 'visible *') { throw 'the flyout did not open on launch' }
+              $r = $state.Substring(8).Split(',') | ForEach-Object { [int]$_ }
+              Add-Type -AssemblyName System.Windows.Forms
+              $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+              Write-Host "screen $($screen.Bounds), work area $($screen.WorkingArea)"
+              if ($r[2] -le $screen.Bounds.Width / 2 -or $r[3] -le $screen.Bounds.Height / 2) { throw 'the flyout is not in the bottom-right corner' }
+              if ($r[3] -gt $screen.WorkingArea.Bottom) { throw 'the flyout overlaps the taskbar' }
+
+              [Probe]::CtrlAltG(); Start-Sleep -Seconds 1
+              $state = [Probe]::Flyout($app.Id); Write-Host "after hotkey: $state"
+              if ($state -ne 'hidden') { throw 'Ctrl+Alt+G did not hide the flyout' }
+              [Probe]::CtrlAltG(); Start-Sleep -Seconds 1
+              $state = [Probe]::Flyout($app.Id); Write-Host "after hotkey again: $state"
+              if ($state -notlike 'visible *') { throw 'Ctrl+Alt+G did not show the flyout' }
+
+              $second = Start-Process "./publish/$flavour/Guillotine.exe" -PassThru
+              if (-not $second.WaitForExit(10000)) { $second.Kill(); throw 'a second launch kept running instead of handing over' }
+              if ($app.HasExited) { throw 'the first instance exited' }
+
+              $cli = "./publish/$flavour/guillotine-cli.exe"
+              & $cli startup on; if ($LASTEXITCODE -ne 0) { throw 'startup on failed' }
+              schtasks /Query /TN Guillotine /V /FO LIST | Select-String 'Task To Run|Logon Mode|Run As User'
+              if ($LASTEXITCODE -ne 0) { throw 'no scheduled task was created' }
+              $status = & $cli startup status; $status
+              if ($status -notmatch 'scheduled task') { throw 'startup status does not report the task' }
+              & $cli startup off; if ($LASTEXITCODE -ne 0) { throw 'startup off failed' }
+              $status = & $cli startup status; $status
+              if ($status -notmatch ': off') { throw 'startup is still on' }
+
+              if (Test-Path $crashLog) { Get-Content $crashLog; throw 'the app logged a crash' }
+            }
+            finally {
+              Stop-Process -Id $app.Id -ErrorAction SilentlyContinue
+              Start-Sleep -Seconds 1
+            }
+          }
+
       - uses: actions/upload-artifact@v7
         with:
           name: guillotine-win-x64-all-in-one

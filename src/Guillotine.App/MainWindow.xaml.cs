@@ -332,14 +332,15 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (Hotkey.TryParse(text, out var hotkey) && TryRegister(hotkey, out var error))
+        string? error = $"'{text}' is not a valid hotkey.";
+        if (Hotkey.TryParse(text, out var hotkey) && TryRegister(hotkey, out error))
         {
             ShowHotkey();
             return;
         }
 
         ShowHotkey();
-        ShowStatus(InfoBarSeverity.Warning, "Hotkey not active", error ?? $"'{text}' is not a valid hotkey.");
+        ShowStatus(InfoBarSeverity.Warning, "Hotkey not active", error ?? $"'{text}' could not be registered.");
     }
 
     private bool TryRegister(Hotkey hotkey, out string? error)

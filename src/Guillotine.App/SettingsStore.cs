@@ -18,16 +18,16 @@ public sealed class SettingsStore
 
     public GuillotineSettings Settings { get; private set; } = new();
     public string? LoadError { get; private set; }
-    public string Path { get; private set; } = ExeSettings;
+    public string FilePath { get; private set; } = ExeSettings;
 
     public void Load()
     {
         LoadError = null;
-        foreach (var candidate in new[] { UserSettings, ExeSettings, System.IO.Path.GetFullPath("settings.json") })
+        foreach (var candidate in new[] { UserSettings, ExeSettings, Path.GetFullPath("settings.json") })
         {
             if (!File.Exists(candidate))
                 continue;
-            Path = candidate;
+            FilePath = candidate;
             try
             {
                 Settings = GuillotineSettings.Load(candidate);
@@ -39,7 +39,7 @@ public sealed class SettingsStore
             }
             return;
         }
-        Path = ExeSettings;
+        FilePath = ExeSettings;
         Settings = new GuillotineSettings();
     }
 
@@ -49,22 +49,22 @@ public sealed class SettingsStore
         JsonObject root;
         try
         {
-            root = File.Exists(Path) ? ParseObject(File.ReadAllText(Path)) : new JsonObject();
+            root = File.Exists(FilePath) ? ParseObject(File.ReadAllText(FilePath)) : new JsonObject();
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException or InvalidOperationException)
         {
-            return $"Could not read {Path}: {ex.Message}";
+            return $"Could not read {FilePath}: {ex.Message}";
         }
         root[key] = value;
         var json = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
 
-        foreach (var target in Path == UserSettings ? [UserSettings] : new[] { Path, UserSettings })
+        foreach (var target in FilePath == UserSettings ? [UserSettings] : new[] { FilePath, UserSettings })
         {
             try
             {
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 File.WriteAllText(target, json);
-                Path = target;
+                FilePath = target;
                 Settings = GuillotineSettings.FromJson(json);
                 return null;
             }
@@ -77,7 +77,7 @@ public sealed class SettingsStore
                 return ex.Message;
             }
         }
-        return $"Could not save settings to {Path} or {UserSettings}.";
+        return $"Could not save settings to {FilePath} or {UserSettings}.";
     }
 
     private static JsonObject ParseObject(string json) =>

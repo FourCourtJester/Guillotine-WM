@@ -14,6 +14,8 @@
     <RootNamespace>Guillotine.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\..\assets\guillotine.ico</ApplicationIcon>
+    <!-- WPF needs per-monitor DPI awareness from app.manifest; the Windows Forms analyzer prefers an API call. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

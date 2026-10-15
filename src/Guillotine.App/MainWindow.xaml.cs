@@ -24,6 +24,7 @@ public partial class MainWindow : FluentWindow
     private readonly IntPtr _hwnd;
     private readonly GlobalHotkey _hotkey;
     private readonly DispatcherTimer _keepOnTop;
+    private readonly DispatcherTimer _statusTimeout;
 
     private bool _allowClose;
     private DateTime _hiddenAt = DateTime.MinValue;
@@ -53,6 +54,14 @@ public partial class MainWindow : FluentWindow
         // While open, stay above everything, including games that keep making themselves topmost.
         _keepOnTop = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _keepOnTop.Tick += (_, _) => RaiseToTop();
+
+        // Notifications close themselves; errors stay until dismissed.
+        _statusTimeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _statusTimeout.Tick += (_, _) =>
+        {
+            _statusTimeout.Stop();
+            Status.IsOpen = false;
+        };
 
         ShowPlacement(_store.Settings.PlacementFor(null));
         StartupSwitch.IsChecked = StartupRegistration.IsEnabled;
@@ -487,5 +496,9 @@ public partial class MainWindow : FluentWindow
         Status.Title = title;
         Status.Message = message;
         Status.IsOpen = true;
+
+        _statusTimeout.Stop();
+        if (severity != InfoBarSeverity.Error)
+            _statusTimeout.Start();
     }
 }

@@ -14,6 +14,7 @@ The app has three fixed size buttons (2560 × 1440, 1920 × 1080, 1280 × 720). 
 ## Done
 
 - 0.2.0: tray icon, flyout panel that stays above everything, global hotkey with capture, immediate Borderless and Always on top switches, start with Windows, single instance.
+- 0.2.1–0.2.3: "No window selected" placeholder and disabled window options until one is picked, notifications at the top (30 seconds; errors stay until closed), dropdowns stay above the flyout.
 
 ## From the original handoff
 

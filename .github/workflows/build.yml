@@ -302,3 +302,5 @@ jobs:
             - **lean**: much smaller, but needs the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64). Windows offers a download link if it is missing.
 
             Keep `settings.json` next to the exe. See the [README](https://github.com/${{ github.repository }}#readme) for usage.
+
+            **Upgrading:** exit Guillotine from its tray icon first, then run the new `Guillotine.exe` once so Start with Windows points at it (as administrator if you turned it on as administrator). Extracting over an old folder replaces `settings.json` with the defaults, so keep your copy if you changed it.

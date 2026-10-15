@@ -6,7 +6,7 @@ Borderless, exact-resolution window placement for ultrawide streaming.
 
 Guillotine moves a game window to a zone on your monitor, resizes it to an exact resolution, and removes the title bar and borders so the client area is the full size. The main use is streaming at true 1440p from a super-ultrawide monitor, where window borders would otherwise take pixels off the captured frame.
 
-> **Status:** 0.2.0. Placement, borderless and always-on-top work from the tray app and the command line. Auto-apply on launch and custom presets are not built yet (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+> **Status:** 0.2.3. Placement, borderless and always-on-top work from the tray app and the command line. Auto-apply on launch and custom presets are not built yet (see [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 ## Download
 

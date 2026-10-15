@@ -37,6 +37,7 @@ internal static class NativeMethods
 
     internal const int GWL_STYLE = -16;
     internal const int GWL_EXSTYLE = -20;
+    internal const uint GW_HWNDPREV = 3;
     internal const uint GW_OWNER = 4;
     internal const uint MONITOR_DEFAULTTONEAREST = 2;
     internal const int DWMWA_CLOAKED = 14;

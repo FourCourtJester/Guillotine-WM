@@ -196,6 +196,36 @@ public static class WindowController
             throw Win32Failure(hwnd, topmost ? "make the window always on top" : "clear always on top");
     }
 
+    /// <summary>
+    /// Raises <paramref name="hwnd"/> to the top of the topmost band when a window of another app
+    /// is above it, then puts this app's own popups (dropdowns, tooltips, menus) back above it, so
+    /// staying on top never buries them. Returns whether anything had to be raised.
+    /// </summary>
+    public static bool KeepAboveOtherApps(IntPtr hwnd)
+    {
+        EnsureWindow(hwnd);
+        uint self = (uint)Environment.ProcessId;
+        var own = new List<IntPtr>(); // nearest above first
+        bool covered = false;
+        for (var above = GetWindow(hwnd, GW_HWNDPREV); above != IntPtr.Zero; above = GetWindow(above, GW_HWNDPREV))
+        {
+            if (!IsWindowVisible(above))
+                continue;
+            GetWindowThreadProcessId(above, out uint process);
+            if (process == self)
+                own.Add(above);
+            else
+                covered = true;
+        }
+        if (!covered)
+            return false;
+
+        SetTopmost(hwnd, true);
+        foreach (var popup in own) // each lands on top, so the highest ends up highest again
+            SetWindowPos(popup, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        return true;
+    }
+
     /// <summary>Puts back the original frame (around the current client area) and turns off always on top.</summary>
     public static WindowInfo Restore(IntPtr hwnd)
     {

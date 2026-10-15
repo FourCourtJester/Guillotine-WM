@@ -108,7 +108,7 @@ public partial class MainWindow : FluentWindow
     private void RaiseToTop()
     {
         if (IsVisible)
-            WindowController.SetTopmost(_hwnd, true); // re-enters the top of the topmost band without moving or activating
+            WindowController.KeepAboveOtherApps(_hwnd); // without moving, activating or covering our own dropdowns
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)

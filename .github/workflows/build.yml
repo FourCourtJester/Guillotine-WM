@@ -149,6 +149,9 @@ jobs:
               [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
               [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
               [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+              [DllImport("user32.dll")] static extern IntPtr GetTopWindow(IntPtr h);
+              [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
               public struct RECT { public int Left, Top, Right, Bottom; }
               // "visible L,T,R,B", "hidden" or "none" for the window titled Guillotine in process pid.
               public static string Flyout(int pid) {
@@ -164,6 +167,18 @@ jobs:
                       return true;
                   }, IntPtr.Zero);
                   return result;
+              }
+              // Title (or [class]) of the highest visible window of process pid.
+              public static string TopWindow(int pid) {
+                  for (var h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero; h = GetWindow(h, 2)) {
+                      uint p; GetWindowThreadProcessId(h, out p);
+                      if (p != pid || !IsWindowVisible(h)) continue;
+                      var title = new StringBuilder(64); GetWindowText(h, title, 64);
+                      if (title.Length > 0) return title.ToString();
+                      var cls = new StringBuilder(64); GetClassName(h, cls, 64);
+                      return "[" + cls + "]";
+                  }
+                  return "none";
               }
               public static void CtrlAltG() {
                   keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 0, UIntPtr.Zero);
@@ -199,6 +214,22 @@ jobs:
               [Probe]::CtrlAltG(); Start-Sleep -Seconds 1
               $state = [Probe]::Flyout($app.Id); Write-Host "after hotkey again: $state"
               if ($state -notlike 'visible *') { throw 'Ctrl+Alt+G did not show the flyout' }
+
+              # The flyout keeps itself on top; its own dropdown must still open above it.
+              Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+              $ae = [System.Windows.Automation.AutomationElement]
+              $window = $ae::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children,
+                (New-Object System.Windows.Automation.PropertyCondition($ae::ProcessIdProperty, $app.Id)))
+              $combo = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                (New-Object System.Windows.Automation.PropertyCondition($ae::AutomationIdProperty, 'WindowList')))
+              if ($null -eq $combo) { throw 'could not find the window list' }
+              $expand = $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
+              $expand.Expand(); Start-Sleep -Milliseconds 1500
+              $top = [Probe]::TopWindow($app.Id)
+              Write-Host "dropdown: $($expand.Current.ExpandCollapseState), top window: $top"
+              if ($expand.Current.ExpandCollapseState -ne 'Expanded') { throw 'the window list did not open' }
+              if ($top -eq 'Guillotine') { throw 'the flyout covers its own dropdown' }
+              $expand.Collapse(); Start-Sleep -Milliseconds 300
 
               $second = Start-Process "./publish/$flavour/Guillotine.exe" -PassThru
               if (-not $second.WaitForExit(10000)) { $second.Kill(); throw 'a second launch kept running instead of handing over' }
